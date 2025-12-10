@@ -14,11 +14,12 @@ use MeuMouse\Joinotify\Bling\API\Controller;
 class Woocommerce {
     
     /**
-     * Initialize WooCommerce integration.
+     * Constructor
      *
+     * @since 1.0.0
      * @return void
      */
-    public static function init() {
+    public function __construct() {
         // Sync products on save
         add_action('save_post_product', array(__CLASS__, 'sync_product_to_bling'), 10, 3);
         

@@ -14,11 +14,12 @@ defined('ABSPATH') || exit;
 class Assets {
     
     /**
-     * Initialize asset management.
+     * Constructor
      *
+     * @since 1.0.0
      * @return void
      */
-    public static function init() {
+    public function __construct() {
         // Admin assets
         add_action('admin_enqueue_scripts', array(__CLASS__, 'enqueue_admin_assets'));
         
@@ -26,6 +27,7 @@ class Assets {
         add_action('wp_enqueue_scripts', array(__CLASS__, 'enqueue_frontend_assets'));
     }
     
+
     /**
      * Enqueue admin assets.
      *
@@ -48,6 +50,7 @@ class Assets {
         self::localize_admin_scripts();
     }
     
+
     /**
      * Enqueue frontend assets.
      *
@@ -68,6 +71,7 @@ class Assets {
         // Localize frontend script data
         self::localize_frontend_scripts();
     }
+
     
     /**
      * Enqueue admin CSS files.
@@ -94,6 +98,7 @@ class Assets {
             wp_enqueue_style('woocommerce_admin_styles');
         }
     }
+
     
     /**
      * Enqueue admin JavaScript files.
@@ -121,6 +126,7 @@ class Assets {
         }
     }
     
+
     /**
      * Localize admin script data.
      *
@@ -133,6 +139,7 @@ class Assets {
             self::get_admin_localization_data()
         );
     }
+
     
     /**
      * Enqueue frontend CSS files.
@@ -149,6 +156,7 @@ class Assets {
         );
     }
     
+
     /**
      * Enqueue frontend JavaScript files.
      *
@@ -163,6 +171,7 @@ class Assets {
             true
         );
     }
+
     
     /**
      * Localize frontend script data.
@@ -177,6 +186,7 @@ class Assets {
         );
     }
     
+
     /**
      * Get admin localization data.
      *
@@ -253,6 +263,7 @@ class Assets {
             ),
         );
     }
+
     
     /**
      * Get frontend localization data.
@@ -274,6 +285,7 @@ class Assets {
         );
     }
     
+
     /**
      * Check if current page is a Bling admin page.
      *
@@ -296,6 +308,7 @@ class Assets {
         
         return false;
     }
+
     
     /**
      * Check if current page is a product page.
@@ -308,6 +321,7 @@ class Assets {
                isset($_GET['post_type']) && $_GET['post_type'] === 'product';
     }
     
+
     /**
      * Check if current page is an order page.
      *
@@ -319,6 +333,7 @@ class Assets {
                isset($_GET['post_type']) && $_GET['post_type'] === 'shop_order';
     }
     
+
     /**
      * Check if page needs Select2.
      *
@@ -336,6 +351,7 @@ class Assets {
                in_array($post_type, array('product', 'shop_order'));
     }
     
+
     /**
      * Check if page needs WooCommerce CSS.
      *
@@ -346,6 +362,7 @@ class Assets {
                self::is_order_page($GLOBALS['pagenow'] ?? '');
     }
     
+
     /**
      * Check if page needs WooCommerce JavaScript.
      *
@@ -356,6 +373,7 @@ class Assets {
                self::is_order_page($GLOBALS['pagenow'] ?? '');
     }
     
+
     /**
      * Check if frontend needs assets.
      *
@@ -375,6 +393,7 @@ class Assets {
         
         return false;
     }
+    
     
     /**
      * Get plugin version for cache busting.
@@ -399,6 +418,7 @@ class Assets {
         return $version;
     }
     
+
     /**
      * Generate asset URL.
      *
@@ -410,6 +430,7 @@ class Assets {
         return $base_url . ltrim($path, '/');
     }
     
+
     /**
      * Check if debug mode is enabled.
      *
@@ -419,6 +440,7 @@ class Assets {
         return defined('WP_DEBUG') && WP_DEBUG;
     }
     
+
     /**
      * Get all WooCommerce order statuses for JavaScript.
      *
@@ -439,6 +461,7 @@ class Assets {
         
         return $formatted;
     }
+    
     
     /**
      * Add inline CSS for immediate styling needs.

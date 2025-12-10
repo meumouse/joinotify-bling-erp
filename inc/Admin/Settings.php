@@ -14,11 +14,12 @@ defined('ABSPATH') || exit;
 class Settings {
     
     /**
-     * Initialize settings.
+     * Constructor
      *
+     * @since 1.0.0
      * @return void
      */
-    public static function init() {
+    public function __construct() {
         add_action('admin_init', array(__CLASS__, 'register_settings'));
         add_filter('bling_settings_tabs', array(__CLASS__, 'add_settings_tab'));
         add_action('bling_settings_tab_content', array(__CLASS__, 'render_settings_tab'));

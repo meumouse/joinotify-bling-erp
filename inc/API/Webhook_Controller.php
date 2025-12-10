@@ -17,11 +17,12 @@ defined('ABSPATH') || exit;
 class Webhook_Controller {
 
     /**
-     * Register webhook management routes.
+     * Constructor
      *
+     * @since 1.0.0
      * @return void
      */
-    public static function register_routes() {
+    public function __construct() {
         // Webhook management
         register_rest_route('bling/v1', '/webhooks', array(
             array(

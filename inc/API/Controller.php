@@ -17,12 +17,12 @@ defined('ABSPATH') || exit;
 class Controller {
 
     /**
-     * Register all REST API routes for Bling integration.
+     * Constructor
      *
      * @since 1.0.0
      * @return void
      */
-    public static function register_routes() {
+    public function __construct() {
         register_rest_route('bling/v1', '/webhook', array(
             'methods'  => 'POST',
             'callback' => array(__CLASS__, 'handle_webhook'),

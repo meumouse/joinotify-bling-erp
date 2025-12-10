@@ -2,9 +2,8 @@
 
 namespace MeuMouse\Joinotify\Bling\Admin;
 
-use WP_REST_Server;
-use WP_REST_Request;
-use WP_REST_Response;
+// Exit if accessed directly.
+defined('ABSPATH') || exit;
 
 /**
  * Handles the WordPress admin settings page for the Bling integration.
@@ -20,7 +19,7 @@ class Admin {
      * @since 1.0.0
      * @return void
      */
-    public static function init() {
+    public function __construct() {
         // Register settings and menu page
         add_action('admin_init', array(__CLASS__, 'register_settings'));
         add_action('admin_menu', array(__CLASS__, 'register_menu_page'));
@@ -29,6 +28,7 @@ class Admin {
         add_filter('bling_settings_tabs', array(__CLASS__, 'default_settings_tabs'));
     }
     
+
     /**
      * Register WordPress options for Bling integration.
      *
@@ -44,6 +44,7 @@ class Admin {
         register_setting('bling-settings-group', 'bling_webhook_secret');
     }
     
+
     /**
      * Add the Bling integration settings page under Tools menu.
      *
@@ -51,7 +52,8 @@ class Admin {
      * @return void
      */
     public static function register_menu_page() {
-        add_management_page(
+        add_submenu_page(
+            'joinotify-workflows',
             __('Bling ERP Configurações', 'joinotify-bling-erp'),
             __('Bling ERP', 'joinotify-bling-erp'),
             'manage_options',
@@ -59,6 +61,7 @@ class Admin {
             array(__CLASS__, 'render_settings_page')
         );
     }
+
     
     /**
      * Default settings tabs.
@@ -75,6 +78,7 @@ class Admin {
         
         return array_merge($tabs, $default_tabs);
     }
+
     
     /**
      * Render the HTML content of the settings page.

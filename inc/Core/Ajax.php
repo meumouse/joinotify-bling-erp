@@ -14,11 +14,12 @@ defined('ABSPATH') || exit;
 class Ajax {
     
     /**
-     * Initialize AJAX handlers.
+     * Constructor
      *
+     * @since 1.0.0
      * @return void
      */
-    public static function init() {
+    public function __construct() {
         // Bulk sync handlers
         add_action('wp_ajax_bling_bulk_sync_products', array(__CLASS__, 'bulk_sync_products'));
         add_action('wp_ajax_bling_bulk_sync_customers', array(__CLASS__, 'bulk_sync_customers'));
