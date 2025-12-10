@@ -1,0 +1,14 @@
+{
+    "name": "meumouse/joinotify-bling-erp",
+    "description": "Plugin de integração do Joinotify com o Bling ERP",
+    "type": "wordpress-plugin",
+    "license": "proprietary",
+    "require": {
+        "php": ">=7.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "MeuMouse\\Joinotify\\Bling\\": "inc/"
+        }
+    }
+}
