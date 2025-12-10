@@ -1,0 +1,375 @@
+/**
+ * Bling ERP Admin Styles
+ * Version: 1.0.0
+ */
+
+/* General Styles */
+.bling-container {
+    margin: 20px 0;
+    padding: 20px;
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.bling-header {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #ddd;
+}
+
+.bling-section {
+    margin-bottom: 30px;
+}
+
+.bling-section-title {
+    font-size: 18px;
+    margin: 0 0 15px 0;
+    color: #23282d;
+}
+
+/* Tab Navigation */
+.bling-tabs {
+    margin: 20px 0;
+}
+
+.bling-tabs .nav-tab-wrapper {
+    border-bottom: 1px solid #ccc;
+    margin: 0;
+}
+
+.bling-tabs .nav-tab {
+    border: 1px solid #ccc;
+    border-bottom: none;
+    margin: 0 5px -1px 0;
+    padding: 5px 10px;
+    background: #f5f5f5;
+    color: #555;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.bling-tabs .nav-tab:hover {
+    background: #fff;
+    color: #23282d;
+}
+
+.bling-tabs .nav-tab-active {
+    background: #fff;
+    border-bottom: 1px solid #fff;
+    color: #23282d;
+}
+
+.bling-tab-content {
+    padding: 20px;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-top: none;
+}
+
+/* Form Elements */
+.bling-form-table th {
+    width: 200px;
+    padding: 20px 10px 20px 0;
+}
+
+.bling-form-table td {
+    padding: 15px 10px;
+}
+
+.bling-checkbox-container {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 15px;
+    background: #f9f9f9;
+    border-radius: 4px;
+}
+
+.bling-checkbox-container p {
+    margin: 8px 0;
+    padding: 5px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.bling-checkbox-container p:last-child {
+    border-bottom: none;
+}
+
+.bling-checkbox-container label {
+    margin-left: 8px;
+    font-weight: normal;
+    cursor: pointer;
+}
+
+.bling-checkbox-container input[type="checkbox"] {
+    margin: 0 5px 0 0;
+    vertical-align: middle;
+}
+
+/* Tool Buttons */
+.bling-tool-buttons {
+    margin: 15px 0;
+}
+
+.bling-tool-buttons .button {
+    margin-right: 8px;
+    margin-bottom: 8px;
+}
+
+.bling-tool-buttons .button-secondary {
+    background: #f0f0f0;
+    border-color: #ccc;
+    color: #555;
+}
+
+.bling-tool-buttons .button-secondary:hover {
+    background: #e5e5e5;
+    border-color: #999;
+}
+
+/* Status Indicators */
+.bling-status-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.bling-status-connected {
+    background: #d1f7cb;
+    color: #0a5c0a;
+    border: 1px solid #a3d99f;
+}
+
+.bling-status-disconnected {
+    background: #f7d1d1;
+    color: #8a1a1a;
+    border: 1px solid #e3a3a3;
+}
+
+.bling-status-pending {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+/* Loading States */
+.bling-loading {
+    position: relative;
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.bling-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #3498db;
+    border-radius: 50%;
+    animation: bling-spin 1s linear infinite;
+}
+
+@keyframes bling-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Tables */
+.bling-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+}
+
+.bling-table th,
+.bling-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+.bling-table th {
+    background: #f5f5f5;
+    font-weight: 600;
+}
+
+.bling-table tr:hover {
+    background: #f9f9f9;
+}
+
+.bling-table .column-actions {
+    width: 120px;
+    text-align: center;
+}
+
+/* Alerts and Notices */
+.bling-alert {
+    padding: 12px 15px;
+    margin: 15px 0;
+    border-left: 4px solid;
+    border-radius: 3px;
+    background: #fff;
+}
+
+.bling-alert-success {
+    border-left-color: #46b450;
+    background: #f7fff7;
+}
+
+.bling-alert-error {
+    border-left-color: #dc3232;
+    background: #fff5f5;
+}
+
+.bling-alert-warning {
+    border-left-color: #ffb900;
+    background: #fff9f0;
+}
+
+.bling-alert-info {
+    border-left-color: #00a0d2;
+    background: #f7fcff;
+}
+
+/* Progress Bars */
+.bling-progress {
+    height: 20px;
+    background: #f0f0f0;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 10px 0;
+}
+
+.bling-progress-bar {
+    height: 100%;
+    background: #007cba;
+    border-radius: 10px;
+    transition: width 0.3s ease;
+}
+
+/* Card Layout */
+.bling-card {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.bling-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.bling-card-title {
+    margin: 0;
+    font-size: 16px;
+    color: #23282d;
+}
+
+/* Responsive Design */
+@media screen and (max-width: 782px) {
+    .bling-form-table th,
+    .bling-form-table td {
+        display: block;
+        width: 100%;
+        padding: 10px 0;
+    }
+    
+    .bling-form-table th {
+        padding-bottom: 5px;
+        font-weight: 600;
+    }
+    
+    .bling-checkbox-container {
+        max-height: 150px;
+    }
+    
+    .bling-table {
+        display: block;
+        overflow-x: auto;
+    }
+}
+
+/* Utility Classes */
+.bling-text-center {
+    text-align: center;
+}
+
+.bling-text-right {
+    text-align: right;
+}
+
+.bling-text-muted {
+    color: #666;
+}
+
+.bling-mt-10 {
+    margin-top: 10px;
+}
+
+.bling-mb-10 {
+    margin-bottom: 10px;
+}
+
+.bling-mt-20 {
+    margin-top: 20px;
+}
+
+.bling-mb-20 {
+    margin-bottom: 20px;
+}
+
+.bling-hidden {
+    display: none !important;
+}
+
+.bling-clearfix::after {
+    content: '';
+    display: table;
+    clear: both;
+}
+
+/* Animations */
+.bling-fade-in {
+    animation: bling-fade-in 0.3s ease;
+}
+
+@keyframes bling-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.bling-slide-in {
+    animation: bling-slide-in 0.3s ease;
+}
+
+@keyframes bling-slide-in {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
