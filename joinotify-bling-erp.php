@@ -53,5 +53,5 @@ add_action( 'plugins_loaded', function() {
     MeuMouse\Joinotify\Bling\Core\Plugin::init();
     
     // Initialize webhook controller
-    add_action('rest_api_init', array('MeuMouse\Joinotify\Bling\API\WebhookController', 'register_routes'));
+    add_action('rest_api_init', array('MeuMouse\Joinotify\Bling\API\Webhook_Controller', 'register_routes'));
 }, 999);

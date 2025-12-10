@@ -55,7 +55,7 @@ class Plugin {
         add_action( 'rest_api_init', array( 'MeuMouse\Joinotify\Bling\API\Controller', 'register_routes' ) );
         
         // Register AJAX handlers
-        add_action( 'admin_init', array( 'MeuMouse\Joinotify\Bling\Core\Settings', 'handle_ajax_requests' ) );
+        add_action( 'admin_init', array( 'MeuMouse\Joinotify\Bling\Admin\Settings', 'handle_ajax_requests' ) );
         
         // Initialize integration (triggers and placeholders)
         if ( class_exists('MeuMouse\Joinotify\Integrations\Integrations_Base') ) {
