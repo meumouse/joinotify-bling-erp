@@ -5,10 +5,14 @@ namespace MeuMouse\Joinotify\Bling\API;
 use WP_REST_Request;
 use WP_REST_Response;
 
+// Exit if accessed directly.
+defined('ABSPATH') || exit;
+
 /**
  * Handles the OAuth and Webhook REST API endpoints for Bling integration.
  *
  * @since 1.0.0
+ * @package MeuMouse.com
  */
 class Controller {
 
@@ -94,7 +98,7 @@ class Controller {
         }
 
         $webhook_data = $body[0]['body'];
-        $event    = isset($webhook_data['event']) ? $webhook_data['event'] : '';
+        $event = isset($webhook_data['event']) ? $webhook_data['event'] : '';
         $situacao = isset($webhook_data['data']['situacao']) ? intval($webhook_data['data']['situacao']) : 0;
         $invoice_id = isset($webhook_data['data']['id']) ? intval($webhook_data['data']['id']) : 0;
         
