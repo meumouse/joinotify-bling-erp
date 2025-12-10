@@ -23,6 +23,7 @@ class Settings {
         add_filter('bling_settings_tabs', array(__CLASS__, 'add_settings_tab'));
         add_action('bling_settings_tab_content', array(__CLASS__, 'render_settings_tab'));
     }
+
     
     /**
      * Register automation settings.
@@ -40,6 +41,7 @@ class Settings {
         register_setting('bling-automation-group', 'bling_invoice_purpose');
     }
     
+
     /**
      * Add automation settings tab.
      *
@@ -50,6 +52,7 @@ class Settings {
         $tabs['automation'] = __('Automação NFe', 'joinotify-bling-erp');
         return $tabs;
     }
+    
     
     /**
      * Render automation settings tab.
@@ -99,24 +102,47 @@ class Settings {
                 
                 <tr>
                     <th scope="row">
-                        <label for="bling_invoice_trigger_statuses">
+                        <label>
                             <?php echo esc_html__('Status que disparam NFe', 'joinotify-bling-erp'); ?>
                         </label>
                     </th>
                     <td>
-                        <select name="bling_invoice_trigger_statuses[]" id="bling_invoice_trigger_statuses" multiple style="width: 300px; height: 150px;">
+                        <div class="bling-checkbox-container">
                             <?php
                             $statuses = wc_get_order_statuses();
-                            foreach ($statuses as $status_key => $status_label) {
-                                $clean_key = str_replace('wc-', '', $status_key);
-                                $selected = in_array($clean_key, $trigger_statuses) ? 'selected' : '';
-                                echo '<option value="' . esc_attr($clean_key) . '" ' . $selected . '>' . esc_html($status_label) . '</option>';
+                            
+                            if (empty($statuses)) {
+                                echo '<p>' . esc_html__('Nenhum status de pedido encontrado. Certifique-se de que o WooCommerce está ativo.', 'joinotify-bling-erp') . '</p>';
+                            } else {
+                                foreach ($statuses as $status_key => $status_label) {
+                                    $clean_key = str_replace('wc-', '', $status_key);
+                                    $checked = in_array($clean_key, (array)$trigger_statuses) ? 'checked' : '';
+                                    $field_id = 'bling_status_' . sanitize_title($clean_key);
+                                    
+                                    echo '<p>';
+                                    echo '<input type="checkbox" id="' . esc_attr($field_id) . '" 
+                                           name="bling_invoice_trigger_statuses[]" 
+                                           value="' . esc_attr($clean_key) . '" 
+                                           ' . $checked . ' />';
+                                    echo '<label for="' . esc_attr($field_id) . '">';
+                                    echo esc_html($status_label);
+                                    echo '</label>';
+                                    echo '</p>';
+                                }
                             }
                             ?>
-                        </select>
+                        </div>
                         <p class="description">
-                            <?php echo esc_html__('Selecione os status de pedido que devem disparar a criação de NFe. Segure CTRL para selecionar múltiplos.', 'joinotify-bling-erp'); ?>
+                            <?php echo esc_html__('Selecione os status de pedido que devem disparar a criação de NFe.', 'joinotify-bling-erp'); ?>
                         </p>
+                        <div class="bling-tool-buttons">
+                            <button type="button" id="bling-select-all-statuses" class="button button-small">
+                                <?php echo esc_html__('Selecionar todos', 'joinotify-bling-erp'); ?>
+                            </button>
+                            <button type="button" id="bling-deselect-all-statuses" class="button button-small">
+                                <?php echo esc_html__('Desmarcar todos', 'joinotify-bling-erp'); ?>
+                            </button>
+                        </div>
                     </td>
                 </tr>
                 
@@ -262,158 +288,24 @@ class Settings {
                     </p>
                 </td>
             </tr>
-        </table>
-        
-        <script type="text/javascript">
-            jQuery(document).ready(function($) {
-                // Bulk sync products
-                $('#bling-sync-all-products').on('click', function(e) {
-                    e.preventDefault();
-                    
-                    if (!confirm('<?php echo esc_js(__('Isso pode levar algum tempo. Deseja continuar?', 'joinotify-bling-erp')); ?>')) {
-                        return;
-                    }
-                    
-                    $(this).prop('disabled', true).text('<?php echo esc_js(__('Sincronizando...', 'joinotify-bling-erp')); ?>');
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'bling_bulk_sync_products',
-                            nonce: '<?php echo wp_create_nonce('bling_bulk_sync'); ?>'
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                alert('<?php echo esc_js(__('Sincronização concluída com sucesso!', 'joinotify-bling-erp')); ?>');
-                            } else {
-                                alert('<?php echo esc_js(__('Erro na sincronização: ', 'joinotify-bling-erp')); ?>' + response.data);
-                            }
-                        },
-                        error: function() {
-                            alert('<?php echo esc_js(__('Erro na requisição.', 'joinotify-bling-erp')); ?>');
-                        },
-                        complete: function() {
-                            $('#bling-sync-all-products').prop('disabled', false).text('<?php echo esc_js(__('Sincronizar Todos os Produtos', 'joinotify-bling-erp')); ?>');
-                        }
-                    });
-                });
-                
-                // Bulk sync customers
-                $('#bling-sync-all-customers').on('click', function(e) {
-                    e.preventDefault();
-                    
-                    if (!confirm('<?php echo esc_js(__('Isso pode levar algum tempo. Deseja continuar?', 'joinotify-bling-erp')); ?>')) {
-                        return;
-                    }
-                    
-                    $(this).prop('disabled', true).text('<?php echo esc_js(__('Sincronizando...', 'joinotify-bling-erp')); ?>');
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'bling_bulk_sync_customers',
-                            nonce: '<?php echo wp_create_nonce('bling_bulk_sync'); ?>'
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                alert('<?php echo esc_js(__('Sincronização concluída com sucesso!', 'joinotify-bling-erp')); ?>');
-                            } else {
-                                alert('<?php echo esc_js(__('Erro na sincronização: ', 'joinotify-bling-erp')); ?>' + response.data);
-                            }
-                        },
-                        error: function() {
-                            alert('<?php echo esc_js(__('Erro na requisição.', 'joinotify-bling-erp')); ?>');
-                        },
-                        complete: function() {
-                            $('#bling-sync-all-customers').prop('disabled', false).text('<?php echo esc_js(__('Sincronizar Todos os Clientes', 'joinotify-bling-erp')); ?>');
-                        }
-                    });
-                });
-            });
-        </script>
-        <?php
-    }
-    
-    /**
-     * Handle bulk sync AJAX requests.
-     *
-     * @return void
-     */
-    public static function handle_ajax_requests() {
-        add_action('wp_ajax_bling_bulk_sync_products', array(__CLASS__, 'ajax_bulk_sync_products'));
-        add_action('wp_ajax_bling_bulk_sync_customers', array(__CLASS__, 'ajax_bulk_sync_customers'));
-    }
-    
-    /**
-     * Bulk sync products AJAX handler.
-     *
-     * @return void
-     */
-    public static function ajax_bulk_sync_products() {
-        check_ajax_referer('bling_bulk_sync', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_die('Unauthorized');
-        }
-        
-        // Get all published products
-        $args = array(
-            'post_type' => 'product',
-            'posts_per_page' => -1,
-            'post_status' => 'publish',
-        );
-        
-        $products = get_posts($args);
-        $synced = 0;
-        $errors = array();
-        
-        foreach ($products as $post) {
-            $product = wc_get_product($post->ID);
             
-            if ($product) {
-                // Trigger product sync
-                do_action('save_post_product', $post->ID, $post, true);
-                $synced++;
-            }
-        }
-        
-        wp_send_json_success(
-            sprintf(
-                __('%d produtos sincronizados com sucesso.', 'joinotify-bling-erp'),
-                $synced
-            )
-        );
-    }
-    
-    /**
-     * Bulk sync customers AJAX handler.
-     *
-     * @return void
-     */
-    public static function ajax_bulk_sync_customers() {
-        check_ajax_referer('bling_bulk_sync', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_die('Unauthorized');
-        }
-        
-        // Get all customers
-        $users = get_users(array('role' => 'customer'));
-        $synced = 0;
-        
-        foreach ($users as $user) {
-            // Trigger customer sync
-            do_action('profile_update', $user->ID, $user);
-            $synced++;
-        }
-        
-        wp_send_json_success(
-            sprintf(
-                __('%d clientes sincronizados com sucesso.', 'joinotify-bling-erp'),
-                $synced
-            )
-        );
+            <tr>
+                <th scope="row">
+                    <?php echo esc_html__('Utilitários', 'joinotify-bling-erp'); ?>
+                </th>
+                <td>
+                    <button id="bling-test-connection" class="button button-secondary">
+                        <?php echo esc_html__('Testar Conexão com Bling', 'joinotify-bling-erp'); ?>
+                    </button>
+                    <button id="bling-clear-cache" class="button button-secondary">
+                        <?php echo esc_html__('Limpar Cache de Sincronização', 'joinotify-bling-erp'); ?>
+                    </button>
+                    <p class="description">
+                        <?php echo esc_html__('Teste a conexão com a API do Bling e limpe o cache de sincronização.', 'joinotify-bling-erp'); ?>
+                    </p>
+                </td>
+            </tr>
+        </table>
+        <?php
     }
 }
