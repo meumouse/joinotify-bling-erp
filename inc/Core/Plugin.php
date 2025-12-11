@@ -78,8 +78,8 @@ class Plugin {
         // check if WooCommerce is active
         add_action( 'woocommerce_loaded', array( $this, 'check_dependencies' ) );
 
-        // instance classes after WooCommerce is loaded
-        add_action( 'plugins_loaded', array( $this, 'instance_classes' ), 999 );
+        // instance classes after Joinotify is loaded
+        add_action( 'joinotify_init', array( $this, 'instance_classes' ) );
 
         // hook after plugin init
         do_action('Joinotify_Bling/After_Init');
@@ -93,7 +93,7 @@ class Plugin {
      * @return void
      */
     private function define_constants() {
-        $base_file = dirname( __DIR__, 2 ) . '/joinotify-bling.php';
+        $base_file = dirname( __DIR__, 2 ) . '/joinotify-bling-erp.php';
         $base_dir = plugin_dir_path( $base_file );
         $base_url = plugin_dir_url( $base_file );
 
@@ -152,7 +152,7 @@ class Plugin {
                 <?php 
                 printf(
                     esc_html__( 'O plugin %1$s requer %2$s para funcionar. Por favor, instale e ative o WooCommerce.', 'joinotify-bling' ),
-                    '<strong>Joinotify Bling</strong>',
+                    '<strong>Joinotify: Integração Bling ERP</strong>',
                     '<strong>WooCommerce</strong>'
                 );
                 ?>
@@ -175,7 +175,7 @@ class Plugin {
                 <?php 
                 printf(
                     esc_html__( 'O plugin %1$s requer %2$s para funcionar. Por favor, instale e ative o Joinotify.', 'joinotify-bling' ),
-                    '<strong>Joinotify Bling</strong>',
+                    '<strong>Joinotify: Integração Bling ERP</strong>',
                     '<strong>Joinotify</strong>'
                 );
                 ?>

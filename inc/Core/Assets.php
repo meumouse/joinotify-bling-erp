@@ -31,7 +31,8 @@ class Assets {
     /**
      * Enqueue admin assets.
      *
-     * @param string $hook Current admin page.
+     * @since 1.0.0
+     * @param string $hook | Current admin page.
      * @return void
      */
     public static function enqueue_admin_assets($hook) {
@@ -54,6 +55,7 @@ class Assets {
     /**
      * Enqueue frontend assets.
      *
+     * @since 1.0.0
      * @return void
      */
     public static function enqueue_frontend_assets() {
@@ -76,6 +78,7 @@ class Assets {
     /**
      * Enqueue admin CSS files.
      *
+     * @since 1.0.0
      * @return void
      */
     private static function enqueue_admin_css() {
@@ -103,6 +106,7 @@ class Assets {
     /**
      * Enqueue admin JavaScript files.
      *
+     * @since 1.0.0
      * @return void
      */
     private static function enqueue_admin_js() {
@@ -130,6 +134,7 @@ class Assets {
     /**
      * Localize admin script data.
      *
+     * @since 1.0.0
      * @return void
      */
     private static function localize_admin_scripts() {
@@ -144,6 +149,7 @@ class Assets {
     /**
      * Enqueue frontend CSS files.
      *
+     * @since 1.0.0
      * @return void
      */
     private static function enqueue_frontend_css() {
@@ -160,6 +166,7 @@ class Assets {
     /**
      * Enqueue frontend JavaScript files.
      *
+     * @since 1.0.0
      * @return void
      */
     private static function enqueue_frontend_js() {
@@ -176,6 +183,7 @@ class Assets {
     /**
      * Localize frontend script data.
      *
+     * @since 1.0.0
      * @return void
      */
     private static function localize_frontend_scripts() {
@@ -246,7 +254,7 @@ class Assets {
             ),
             'urls' => array(
                 'admin_url' => admin_url(),
-                'plugin_url' => plugin_dir_url(dirname(__FILE__)),
+                'plugin_url' => plugin_dir_url(dirname(dirname(__FILE__))), // Corrigido: Volta mais um nível
                 'bling_dashboard' => 'https://www.bling.com.br',
                 'bling_api_docs' => 'https://ajuda.bling.com.br/hc/pt-br/categories/360002186394-API-para-Desenvolvedores',
             ),
@@ -268,6 +276,7 @@ class Assets {
     /**
      * Get frontend localization data.
      *
+     * @since 1.0.0
      * @return array Localization data.
      */
     private static function get_frontend_localization_data() {
@@ -289,20 +298,21 @@ class Assets {
     /**
      * Check if current page is a Bling admin page.
      *
-     * @param string $hook Current admin page.
+     * @since 1.0.0
+     * @param string $hook | Current admin page.
      * @return bool
      */
-    private static function is_bling_page($hook) {
-        if ($hook === 'tools_page_joinotify-bling') {
+    private static function is_bling_page( $hook ) {
+        if ( $hook === 'tools_page_joinotify-bling' ) {
             return true;
         }
         
-        if (isset($_GET['page']) && $_GET['page'] === 'joinotify-bling') {
+        if ( isset( $_GET['page'] ) && $_GET['page'] === 'joinotify-bling' ) {
             return true;
         }
         
         // Check for product or order edit pages with Bling meta boxes
-        if (self::is_product_page($hook) || self::is_order_page($hook)) {
+        if ( self::is_product_page( $hook ) || self::is_order_page( $hook ) ) {
             return true;
         }
         
@@ -313,70 +323,72 @@ class Assets {
     /**
      * Check if current page is a product page.
      *
+     * @since 1.0.0
      * @param string $hook Current admin page.
      * @return bool
      */
-    private static function is_product_page($hook) {
-        return in_array($hook, array('post.php', 'post-new.php')) && 
-               isset($_GET['post_type']) && $_GET['post_type'] === 'product';
+    private static function is_product_page( $hook ) {
+        return in_array( $hook, array( 'post.php', 'post-new.php' ) ) && isset( $_GET['post_type'] ) && $_GET['post_type'] === 'product';
     }
     
 
     /**
      * Check if current page is an order page.
      *
-     * @param string $hook Current admin page.
+     * @since 1.0.0
+     * @param string $hook | Current admin page.
      * @return bool
      */
-    private static function is_order_page($hook) {
-        return in_array($hook, array('post.php', 'post-new.php')) && 
-               isset($_GET['post_type']) && $_GET['post_type'] === 'shop_order';
+    private static function is_order_page( $hook ) {
+        return in_array( $hook, array( 'post.php', 'post-new.php' ) ) && isset( $_GET['post_type'] ) && $_GET['post_type'] === 'shop_order';
     }
     
 
     /**
      * Check if page needs Select2.
      *
+     * @since 1.0.0
      * @return bool
      */
     private static function needs_select2() {
         // Check if we're on a Bling settings page
-        if (isset($_GET['page']) && $_GET['page'] === 'joinotify-bling') {
+        if ( isset( $_GET['page'] ) && $_GET['page'] === 'joinotify-bling' ) {
             return true;
         }
         
         // Check if we're on product or order pages
         global $pagenow, $post_type;
-        return in_array($pagenow, array('post.php', 'post-new.php')) && 
-               in_array($post_type, array('product', 'shop_order'));
+
+        return in_array($pagenow, array('post.php', 'post-new.php')) && in_array($post_type, array('product', 'shop_order'));
     }
     
 
     /**
      * Check if page needs WooCommerce CSS.
      *
+     * @since 1.0.0
      * @return bool
      */
     private static function needs_woocommerce_css() {
-        return self::is_product_page($GLOBALS['pagenow'] ?? '') || 
-               self::is_order_page($GLOBALS['pagenow'] ?? '');
+        return self::is_product_page($GLOBALS['pagenow'] ?? '') || self::is_order_page($GLOBALS['pagenow'] ?? '');
     }
     
 
     /**
      * Check if page needs WooCommerce JavaScript.
      *
+     * @since 1.0.0
      * @return bool
      */
     private static function needs_woocommerce_js() {
-        return self::is_product_page($GLOBALS['pagenow'] ?? '') || 
-               self::is_order_page($GLOBALS['pagenow'] ?? '');
+        return self::is_product_page($GLOBALS['pagenow'] ?? '') || self::is_order_page($GLOBALS['pagenow'] ?? '');
     }
     
 
     /**
      * Check if frontend needs assets.
      *
+     * @since 1.0.0
      * @return bool
      */
     private static function frontend_needs_assets() {
@@ -388,6 +400,7 @@ class Assets {
         // Check if we're on a checkout page with Bling integration
         if (is_checkout()) {
             $auto_create = get_option('bling_auto_create_invoice', 'yes');
+            
             return $auto_create === 'yes' && !empty(get_option('bling_access_token'));
         }
         
@@ -398,20 +411,25 @@ class Assets {
     /**
      * Get plugin version for cache busting.
      *
+     * @since 1.0.0
      * @return string Plugin version.
      */
     private static function get_version() {
         static $version = null;
         
-        if ($version === null) {
-            // Try to get version from main plugin file
-            $plugin_file = dirname(dirname(dirname(__FILE__))) . '/joinotify-bling-erp.php';
-            
-            if (function_exists('get_plugin_data') && file_exists($plugin_file)) {
-                $plugin_data = get_plugin_data($plugin_file);
-                $version = $plugin_data['Version'] ?? '1.0.0';
+        if ( $version === null ) {
+            if (defined('JOINOTIFY_BLING_VERSION')) {
+                $version = JOINOTIFY_BLING_VERSION;
             } else {
-                $version = defined('JOINOTIFY_BLING_VERSION') ? JOINOTIFY_BLING_VERSION : '1.0.0';
+                // Fallback: tenta obter do arquivo principal do plugin
+                $plugin_file = dirname(dirname(dirname(dirname(__FILE__)))) . '/joinotify-bling-erp.php';
+                
+                if (function_exists('get_plugin_data') && file_exists($plugin_file)) {
+                    $plugin_data = get_plugin_data($plugin_file);
+                    $version = $plugin_data['Version'] ?? '1.0.0';
+                } else {
+                    $version = '1.0.0';
+                }
             }
         }
         
@@ -422,18 +440,25 @@ class Assets {
     /**
      * Generate asset URL.
      *
-     * @param string $path Asset path relative to assets directory.
+     * @since 1.0.0
+     * @param string $path | Asset path relative to assets directory.
      * @return string Full URL to asset.
      */
     public static function asset_url($path) {
-        $base_url = plugins_url('assets/', dirname(__FILE__) . '/../');
-        return $base_url . ltrim($path, '/');
+        if (defined('JOINOTIFY_BLING_ASSETS')) {
+            return JOINOTIFY_BLING_ASSETS . ltrim($path, '/');
+        }
+        
+        $plugin_url = plugin_dir_url(dirname(dirname(dirname(__FILE__))));
+        
+        return $plugin_url . 'assets/' . ltrim($path, '/');
     }
     
 
     /**
      * Check if debug mode is enabled.
      *
+     * @since 1.0.0
      * @return bool
      */
     public static function is_debug() {

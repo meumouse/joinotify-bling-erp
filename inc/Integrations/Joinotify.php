@@ -25,9 +25,8 @@ if ( class_exists('MeuMouse\Joinotify\Integrations\Integrations_Base') ) {
          * @return void
          */
         public function __construct() {
-            error_log('teste');
             // Add integration item in Joinotify settings (Integrations tab).
-            add_filter( 'Joinotify/Settings/Tabs/Integrations', array( $this, 'add_integration_item' ), 55, 1 );
+            add_filter( 'Joinotify/Settings/Tabs/Integrations', array( $this, 'add_integration_item' ), 60, 1 );
             
             // Register triggers for Bling events.
             add_filter( 'Joinotify/Builder/Get_All_Triggers', array( $this, 'add_triggers' ), 10, 1 );
