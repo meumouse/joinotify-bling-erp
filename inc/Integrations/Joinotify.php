@@ -9,7 +9,6 @@ use MeuMouse\Joinotify\Admin\Admin as Joinotify_Admin;
 defined('ABSPATH') || exit;
 
 if ( class_exists('MeuMouse\Joinotify\Integrations\Integrations_Base') ) {
-
     /**
      * Integration with Bling ERP for Joinotify triggers and placeholders.
      *
@@ -38,7 +37,7 @@ if ( class_exists('MeuMouse\Joinotify\Integrations\Integrations_Base') ) {
             add_action( 'Joinotify/Builder/Triggers_Content', array( $this, 'add_triggers_content' ) );
             
             // Register placeholders for Bling data.
-            add_filter( 'Joinotify/Builder/Placeholders_List', array( $this, 'add_placeholders' ), 10, 2 );
+            add_filter( 'Joinotify/Builder/Placeholders_List', array( $this, 'add_placeholders' ), 20, 2 );
             
             // Add integration settings link or info in Joinotify settings page.
             add_action( 'Joinotify/Settings/Tabs/Integrations/Bling', array( $this, 'add_modal_settings' ) );
@@ -153,60 +152,274 @@ if ( class_exists('MeuMouse\Joinotify\Integrations\Integrations_Base') ) {
          * @return array Modified placeholders including Bling placeholders.
          */
         public function add_placeholders( $placeholders, $payload ) {
-            // Only add placeholders for Bling integration triggers
-            if ( isset( $payload['integration'] ) && $payload['integration'] === 'bling' ) {
-                $invoice = isset( $payload['invoice_data'] ) ? $payload['invoice_data'] : array();
-                $trigger_names = array( 
-                    'bling_invoice_created',
-                    'bling_invoice_authorized',
-                    'bling_invoice_cancelled',
-                    'bling_invoice_rejected',
-                    'bling_invoice_denied',
-                    'bling_invoice_deleted'
-                );
+            $invoice = isset( $payload['invoice_data'] ) ? $payload['invoice_data'] : array();
+            $trigger_names = array( 
+                'bling_invoice_created',
+                'bling_invoice_authorized',
+                'bling_invoice_cancelled',
+                'bling_invoice_rejected',
+                'bling_invoice_denied',
+                'bling_invoice_deleted'
+            );
 
-                $numero = isset($invoice['numero']) ? $invoice['numero'] : '';
-                $situacao = isset($invoice['situacao']) ? $invoice['situacao'] : '';
-                $total = isset($invoice['valorNota']) ? $invoice['valorNota'] : ( isset($invoice['valorNotaFiscal']) ? $invoice['valorNotaFiscal'] : '' );
-                $client_name = isset($invoice['cliente']) ? $invoice['cliente']['nome'] : '';
+            // Extract data from the new payload structure
+            $numero = isset( $invoice['numero'] ) ? $invoice['numero'] : '';
+            $situacao = $this->get_invoice_status_text( $invoice['situacao'] ?? '' );
+            $valorNota = isset( $invoice['valorNota'] ) ? $invoice['valorNota'] : '0';
+            $total = is_numeric( $valorNota ) ? number_format( $valorNota, 2, ',', '.' ) : $valorNota;
+            $client_name = isset( $invoice['contato']['nome'] ) ? $invoice['contato']['nome'] : '';
+            $client_document = isset( $invoice['contato']['numeroDocumento'] ) ? $invoice['contato']['numeroDocumento'] : '';
+            $client_phone = isset( $invoice['contato']['telefone'] ) ? $invoice['contato']['telefone'] : '';
+            $client_email = isset( $invoice['contato']['email'] ) ? $invoice['contato']['email'] : '';
+            $dataEmissao = isset( $invoice['dataEmissao'] ) ? $invoice['dataEmissao'] : '';
+            $chaveAcesso = isset( $invoice['chaveAcesso'] ) ? $invoice['chaveAcesso'] : '';
+            $linkDanfe = isset( $invoice['linkDanfe'] ) ? $invoice['linkDanfe'] : '';
+            $linkPDF = isset( $invoice['linkPDF'] ) ? $invoice['linkPDF'] : '';
+            $linkXML = isset( $invoice['xml'] ) ? $invoice['xml'] : '';
+            
+            // Get product information (all items)
+            $item_desc = '';
+            $item_qtd = '';
+            $item_valor = '';
+            $all_items = '';
+            
+            if ( isset( $invoice['itens'] ) && is_array( $invoice['itens'] ) ) {
+                // First item (for backward compatibility)
+                $first_item = $invoice['itens'][0] ?? array();
+                $item_desc = isset( $first_item['descricao'] ) ? $first_item['descricao'] : '';
+                $item_qtd = isset( $first_item['quantidade'] ) ? $first_item['quantidade'] : '';
+                $item_valor = isset( $first_item['valor'] ) ? number_format( $first_item['valor'], 2, ',', '.' ) : '';
                 
-                $placeholders['bling'] = array(
-                    '{{ bling_invoice_number }}' => array(
-                        'triggers' => $trigger_names,
-                        'description' => esc_html__( 'Número da nota fiscal no Bling', 'joinotify-bling-erp' ),
-                        'replacement' => array(
-                            'production' => $numero,
-                            'sandbox'    => '123'
-                        ),
-                    ),
-                    '{{ bling_invoice_status }}' => array(
-                        'triggers' => $trigger_names,
-                        'description' => esc_html__( 'Situação/status atual da NFe no Bling', 'joinotify-bling-erp' ),
-                        'replacement' => array(
-                            'production' => $situacao,
-                            'sandbox' => 'Autorizada'
-                        ),
-                    ),
-                    '{{ bling_invoice_total }}' => array(
-                        'triggers' => $trigger_names,
-                        'description' => esc_html__( 'Valor total da nota fiscal', 'joinotify-bling-erp' ),
-                        'replacement' => array(
-                            'production' => $total,
-                            'sandbox' => '100.00'
-                        ),
-                    ),
-                    '{{ bling_client_name }}' => array(
-                        'triggers' => $trigger_names,
-                        'description' => esc_html__( 'Nome do cliente/destinatário da nota fiscal', 'joinotify-bling-erp' ),
-                        'replacement' => array(
-                            'production' => $client_name,
-                            'sandbox' => esc_html__( 'Nome do Cliente', 'joinotify-bling-erp' )
-                        ),
-                    ),
-                );
+                // All items formatted
+                $items_formatted = array();
+                foreach ( $invoice['itens'] as $index => $item ) {
+                    $product_number = $index + 1;
+                    $description = isset( $item['descricao'] ) ? $item['descricao'] : '';
+                    $quantity = isset( $item['quantidade'] ) ? $item['quantidade'] : '';
+                    $value = isset( $item['valor'] ) ? number_format( $item['valor'], 2, ',', '.' ) : '';
+                    
+                    $items_formatted[] = sprintf(
+                        'Produto %d - %s - Valor R$%s - Quantidade %s',
+                        $product_number,
+                        $description,
+                        $value,
+                        $quantity
+                    );
+                }
+                
+                $all_items = implode( "\n", $items_formatted );
+            }
+            
+            // Get address information
+            $client_address = '';
+            $client_city = '';
+            $client_state = '';
+            $client_zip = '';
+            
+            if ( isset( $invoice['contato']['endereco'] ) ) {
+                $endereco = $invoice['contato']['endereco'];
+                $client_address = trim( ( $endereco['endereco'] ?? '' ) . ', ' . ( $endereco['numero'] ?? '' ) );
+                $client_city = $endereco['municipio'] ?? '';
+                $client_state = $endereco['uf'] ?? '';
+                $client_zip = $endereco['cep'] ?? '';
             }
 
+            $placeholders['bling'] = array(
+                '{{ bling_invoice_number }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Número da nota fiscal no Bling', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $numero,
+                        'sandbox'    => '123456'
+                    ),
+                ),
+                '{{ bling_invoice_status }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Situação/status atual da NFe no Bling', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $situacao,
+                        'sandbox' => esc_html__( 'Autorizada', 'joinotify-bling-erp' )
+                    ),
+                ),
+                '{{ bling_invoice_total }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Valor total da nota fiscal formatado', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => 'R$ ' . $total,
+                        'sandbox' => 'R$ 100,00'
+                    ),
+                ),
+                '{{ bling_invoice_raw_total }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Valor total da nota fiscal (número puro)', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $valorNota,
+                        'sandbox' => '100'
+                    ),
+                ),
+                '{{ bling_client_name }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Nome do cliente/destinatário da nota fiscal', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $client_name,
+                        'sandbox' => esc_html__( 'João da Silva', 'joinotify-bling-erp' )
+                    ),
+                ),
+                '{{ bling_client_document }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'CPF/CNPJ do cliente', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $client_document,
+                        'sandbox' => '123.456.789-00'
+                    ),
+                ),
+                '{{ bling_client_email }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'E-mail do cliente', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $client_email,
+                        'sandbox' => 'cliente@exemplo.com'
+                    ),
+                ),
+                '{{ bling_client_phone }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Telefone do cliente', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $client_phone,
+                        'sandbox' => '(11) 99999-9999'
+                    ),
+                ),
+                '{{ bling_invoice_issue_date }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Data de emissão da nota fiscal', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $dataEmissao,
+                        'sandbox' => '2025-12-11 12:35:00'
+                    ),
+                ),
+                '{{ bling_invoice_access_key }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Chave de acesso da NFe', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $chaveAcesso,
+                        'sandbox' => '4125...4290'
+                    ),
+                ),
+                '{{ bling_invoice_danfe_link }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Link para visualizar DANFE', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $linkDanfe,
+                        'sandbox' => 'https://www.bling.com.br/doc.view.php?id=ba7...'
+                    ),
+                ),
+                '{{ bling_invoice_pdf_link }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Link para baixar PDF da nota', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $linkPDF,
+                        'sandbox' => 'https://www.bling.com.br/doc.view.php?PDF=true&id=ba7f46...'
+                    ),
+                ),
+                '{{ bling_invoice_xml_link }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Link para baixar XML da nota', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $linkXML,
+                        'sandbox' => 'https://www.bling.com.br/relatorios/nfe.xml.php?chaveAcesso=4125...'
+                    ),
+                ),
+                '{{ bling_product_description }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Descrição do primeiro produto da nota', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $item_desc,
+                        'sandbox' => esc_html__( 'Produto Exemplo', 'joinotify-bling-erp' )
+                    ),
+                ),
+                '{{ bling_product_quantity }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Quantidade do primeiro produto', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $item_qtd,
+                        'sandbox' => '1'
+                    ),
+                ),
+                '{{ bling_product_unit_value }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Valor unitário do primeiro produto', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => 'R$ ' . $item_valor,
+                        'sandbox' => 'R$ 100,00'
+                    ),
+                ),
+                '{{ bling_all_products }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Todos os produtos da nota fiscal formatados (um por linha)', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $all_items,
+                        'sandbox' => "Produto 1 - Produto Exemplo 1 - Valor R$100,00 - Quantidade 2\nProduto 2 - Produto Exemplo 2 - Valor R$50,00 - Quantidade 1"
+                    ),
+                ),
+                '{{ bling_client_address }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Endereço completo do cliente', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $client_address,
+                        'sandbox' => esc_html__( 'Rua Exemplo, 123', 'joinotify-bling-erp' )
+                    ),
+                ),
+                '{{ bling_client_city }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Cidade do cliente', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $client_city,
+                        'sandbox' => esc_html__( 'São Paulo', 'joinotify-bling-erp' )
+                    ),
+                ),
+                '{{ bling_client_state }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'Estado do cliente', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $client_state,
+                        'sandbox' => 'SP'
+                    ),
+                ),
+                '{{ bling_client_zip }}' => array(
+                    'triggers' => $trigger_names,
+                    'description' => esc_html__( 'CEP do cliente', 'joinotify-bling-erp' ),
+                    'replacement' => array(
+                        'production' => $client_zip,
+                        'sandbox' => '01234-567'
+                    ),
+                ),
+            );
+
             return $placeholders;
+        }
+
+
+        /**
+         * Convert invoice status code to human-readable text.
+         *
+         * @since 1.0.0
+         * @param string $status_code The status code from Bling.
+         * @return string Human-readable status text.
+         */
+        private function get_invoice_status_text( $status_code ) {
+            $status_map = array(
+                '1' => esc_html__( 'Em digitação', 'joinotify-bling-erp' ),
+                '2' => esc_html__( 'Autorizada', 'joinotify-bling-erp' ),
+                '3' => esc_html__( 'Cancelada', 'joinotify-bling-erp' ),
+                '4' => esc_html__( 'Encerrada', 'joinotify-bling-erp' ),
+                '5' => esc_html__( 'Rejeitada', 'joinotify-bling-erp' ),
+                '6' => esc_html__( 'Denegada', 'joinotify-bling-erp' ),
+                '7' => esc_html__( 'Inutilizada', 'joinotify-bling-erp' ),
+                '8' => esc_html__( 'Contingência', 'joinotify-bling-erp' ),
+                '9' => esc_html__( 'Em processamento', 'joinotify-bling-erp' ),
+            );
+
+            return isset( $status_map[$status_code] ) ? $status_map[$status_code] : esc_html__( 'Desconhecido', 'joinotify-bling-erp' );
         }
 
         

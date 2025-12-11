@@ -112,7 +112,7 @@ class Controller {
             error_log('[JOINOTIFY - BLING ERP]: Bling Webhook Received: ' . print_r( $body, true ) );
         }
         
-        if ( empty($body[0]['body']) ) {
+        if ( empty( $body[0]['body'] ) ) {
             return new WP_REST_Response( array('error' => 'Invalid payload'), 400 );
         }
 
@@ -148,7 +148,7 @@ class Controller {
             return new WP_REST_Response( array('message' => 'Event ignored'), 200 );
         }
         
-        if ( empty($trigger_hook) ) {
+        if ( empty( $trigger_hook ) ) {
             // No relevant trigger for this event
             return new WP_REST_Response( array('message' => 'Event ignored'), 200 );
         }
@@ -164,11 +164,11 @@ class Controller {
         
         // Prepare payload for Joinotify Workflow Processor
         $payload = array(
-            'type'        => 'trigger',
-            'hook'        => $trigger_hook,
-            'integration' => 'bling',
-            'invoice_id'  => $invoice_id,
-            'invoice_data'=> $invoice_data,
+            'type'          => 'trigger',
+            'hook'          => $trigger_hook,
+            'integration'   => 'bling',
+            'invoice_id'    => $invoice_id,
+            'invoice_data'  => $invoice_data,
         );
         
         // Only process workflows if integration is enabled in Joinotify settings
@@ -253,7 +253,7 @@ class Controller {
         error_log('Bling OAuth Response Status: ' . $status);
         error_log('Bling OAuth Response Body: ' . print_r($body, true));
         
-        if ( $status !== 200 || empty($body['access_token']) ) {
+        if ( $status !== 200 || empty( $body['access_token'] ) ) {
             $error_msg = isset($body['error_description']) ? $body['error_description'] : ( isset($body['error']['message']) ? $body['error']['message'] : 'HTTP ' . $status );
             return new WP_REST_Response( array(
                 'success' => false,
@@ -270,7 +270,7 @@ class Controller {
         return new WP_REST_Response( array(
             'success'      => true,
             'message'      => __('Autenticação bem-sucedida!', 'joinotify-bling-erp'),
-            'redirect_url' => admin_url('tools.php?page=joinotify-bling&auth=success')
+            'redirect_url' => admin_url('admin.php?page=joinotify-bling'),
         ), 200 );
     }
     
@@ -315,7 +315,7 @@ class Controller {
      * @return string|\WP_Error New access token on success, WP_Error on failure.
      */
     public static function refresh_token( $refresh_token ) {
-        $client_id     = get_option('bling_client_id');
+        $client_id = get_option('bling_client_id');
         $client_secret = get_option('bling_client_secret');
        
         if ( empty($client_id) || empty($client_secret) ) {
@@ -348,7 +348,7 @@ class Controller {
         $status = wp_remote_retrieve_response_code($response);
         $body = json_decode( wp_remote_retrieve_body($response), true );
 
-        error_log('BLING REFRESH: Status ' . $status . ' -> ' . print_r($body, true));
+        error_log('[JOINOTIFY - BLING ERP]: BLING REFRESH: Status ' . $status . ' -> ' . print_r($body, true));
 
         if ( $status !== 200 || empty( $body['access_token'] ) ) {
             $err = isset( $body['error_description'] ) ? $body['error_description'] : ( isset($body['error']) ? $body['error'] : __('Falha ao renovar token.', 'joinotify-bling-erp') );
