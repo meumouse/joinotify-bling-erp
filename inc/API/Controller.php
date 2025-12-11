@@ -23,6 +23,17 @@ class Controller {
      * @return void
      */
     public function __construct() {
+        add_action( 'rest_api_init', array( $this, 'register_routes' ) );
+    }
+
+    
+    /**
+     * Register REST API routes
+     *
+     * @since 1.0.0
+     * @return void
+     */
+    public function register_routes() {
         register_rest_route('bling/v1', '/webhook', array(
             'methods'  => 'POST',
             'callback' => array(__CLASS__, 'handle_webhook'),
@@ -43,6 +54,7 @@ class Controller {
             },
         ));
     }
+    
     
     /**
      * Verify the Bling webhook signature for security.

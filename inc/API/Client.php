@@ -107,23 +107,28 @@ class Client {
             'raw' => $body,
         );
     }
+
     
     /**
      * Get Bling categories for products.
      *
+     * @since 1.0.0
      * @param int $page Page number.
      * @param int $limit Items per page.
      * @return array|\WP_Error Categories or error.
      */
     public static function get_categories($page = 1, $limit = 100) {
         $endpoint = '/categorias/produtos?pagina=' . $page . '&limite=' . $limit;
+
         return self::request('GET', $endpoint);
     }
     
+
     /**
      * Get Bling products.
      *
-     * @param array $params Query parameters.
+     * @since 1.0.0
+     * @param array $params | Query parameters.
      * @return array|\WP_Error Products or error.
      */
     public static function get_products($params = array()) {
@@ -138,9 +143,11 @@ class Client {
         return self::request('GET', $endpoint);
     }
     
+
     /**
      * Create a product in Bling.
      *
+     * @since 1.0.0
      * @param array $product_data Product data.
      * @return array|\WP_Error Created product or error.
      */
@@ -148,51 +155,61 @@ class Client {
         return self::request('POST', '/produtos', $product_data);
     }
     
+
     /**
      * Update a product in Bling.
      *
-     * @param int $product_id Product ID.
-     * @param array $product_data Product data.
+     * @since 1.0.0
+     * @param int $product_id | Product ID.
+     * @param array $product_data | Product data.
      * @return array|\WP_Error Updated product or error.
      */
     public static function update_product($product_id, $product_data) {
         return self::request('PUT', '/produtos/' . $product_id, $product_data);
     }
     
+    
     /**
      * Create a sales order in Bling.
      *
-     * @param array $order_data Order data.
+     * @since 1.0.0
+     * @param array $order_data | Order data.
      * @return array|\WP_Error Created order or error.
      */
     public static function create_sales_order($order_data) {
         return self::request('POST', '/pedidos/vendas', $order_data);
     }
     
+
     /**
      * Create an invoice (NFe) in Bling.
      *
-     * @param array $invoice_data Invoice data.
+     * @since 1.0.0
+     * @param array $invoice_data | Invoice data.
      * @return array|\WP_Error Created invoice or error.
      */
     public static function create_invoice($invoice_data) {
         return self::request('POST', '/nfe', $invoice_data);
     }
     
+
     /**
      * Get an invoice by ID.
      *
-     * @param int $invoice_id Invoice ID.
+     * @since 1.0.0
+     * @param int $invoice_id | Invoice ID.
      * @return array|\WP_Error Invoice data or error.
      */
     public static function get_invoice($invoice_id) {
         return self::request('GET', '/nfe/' . $invoice_id);
     }
     
+
     /**
      * Get invoices with filters.
      *
-     * @param array $params Query parameters.
+     * @since 1.0.0
+     * @param array $params | Query parameters.
      * @return array|\WP_Error Invoices or error.
      */
     public static function get_invoices($params = array()) {
@@ -207,38 +224,46 @@ class Client {
         return self::request('GET', $endpoint);
     }
     
+
     /**
      * Create a webhook in Bling.
      *
-     * @param array $webhook_data Webhook data.
+     * @since 1.0.0
+     * @param array $webhook_data | Webhook data.
      * @return array|\WP_Error Created webhook or error.
      */
     public static function create_webhook($webhook_data) {
         return self::request('POST', '/webhooks', $webhook_data);
     }
+
     
     /**
      * Get webhooks from Bling.
      *
+     * @since 1.0.0
      * @return array|\WP_Error Webhooks or error.
      */
     public static function get_webhooks() {
         return self::request('GET', '/webhooks');
     }
     
+    
     /**
      * Delete a webhook in Bling.
      *
-     * @param int $webhook_id Webhook ID.
+     * @since 1.0.0
+     * @param int $webhook_id | Webhook ID.
      * @return array|\WP_Error Response or error.
      */
     public static function delete_webhook($webhook_id) {
         return self::request('DELETE', '/webhooks/' . $webhook_id);
     }
     
+    
     /**
      * Get contacts from Bling.
      *
+     * @since 1.0.0
      * @param array $params Query parameters.
      * @return array|\WP_Error Contacts or error.
      */

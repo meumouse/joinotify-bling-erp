@@ -2,6 +2,9 @@
 
 namespace MeuMouse\Joinotify\Bling\Core;
 
+use MeuMouse\Joinotify\Bling\API\Client;
+use MeuMouse\Joinotify\Bling\Integrations\WooCommerce;
+
 // Exit if accessed directly.
 defined('ABSPATH') || exit;
 
@@ -148,7 +151,7 @@ class Ajax {
      * @return void
      */
     public static function test_connection() {
-        check_ajax_referer('bling_test_connection', 'nonce');
+        check_ajax_referer('bling_admin_nonce', 'nonce');
         
         if (!current_user_can('manage_options')) {
             wp_die('Unauthorized');
@@ -163,7 +166,7 @@ class Ajax {
         
         // Test connection by fetching categories
         try {
-            $client = new \MeuMouse\Joinotify\Bling\API\Client();
+            $client = new Client();
             $response = $client::get_categories(1, 1);
             
             if (is_wp_error($response)) {
@@ -257,7 +260,7 @@ class Ajax {
         }
         
         try {
-            $client = new \MeuMouse\Joinotify\Bling\API\Client();
+            $client = new Client();
             $response = $client::create_webhook(array(
                 'event' => $event,
                 'url' => $url,
@@ -304,7 +307,7 @@ class Ajax {
         }
         
         try {
-            $client = new \MeuMouse\Joinotify\Bling\API\Client();
+            $client = new Client();
             $response = $client::delete_webhook($webhook_id);
             
             if (is_wp_error($response)) {
@@ -331,84 +334,124 @@ class Ajax {
     /**
      * Get webhooks AJAX handler.
      *
+     * @since 1.0.0
      * @return void
      */
     public static function get_webhooks() {
-        check_ajax_referer('bling_webhook', 'nonce');
+        $nonce = $_POST['nonce'] ?? '';
+        
+        if (!wp_verify_nonce($nonce, 'bling_admin_nonce')) {
+            wp_send_json_error(__('Nonce de segurança inválido.', 'joinotify-bling-erp'), 403);
+        }
         
         if (!current_user_can('manage_options')) {
-            wp_die('Unauthorized');
+            wp_send_json_error(__('Permissão negada.', 'joinotify-bling-erp'), 403);
         }
         
         try {
-            $client = new \MeuMouse\Joinotify\Bling\API\Client();
+            // Verificar se temos token de acesso
+            $access_token = get_option('bling_access_token');
+            
+            if (empty($access_token)) {
+                wp_send_json_error(__('Token de acesso não configurado. Configure as credenciais primeiro.', 'joinotify-bling-erp'));
+            }
+            
+            $client = new Client();
+            
+            // Verificar se o método get_webhooks existe na classe Client
+            if (!method_exists($client, 'get_webhooks')) {
+                wp_send_json_error(__('Método get_webhooks não encontrado na API Client.', 'joinotify-bling-erp'));
+            }
+            
             $response = $client::get_webhooks();
             
             if (is_wp_error($response)) {
                 wp_send_json_error($response->get_error_message());
             }
             
+            // Verificar status da resposta
+            if ($response['status'] !== 200) {
+                wp_send_json_error(sprintf(
+                    __('Erro ao obter webhooks. Status: %d', 'joinotify-bling-erp'),
+                    $response['status']
+                ));
+            }
+            
             $webhooks = isset($response['data']['data']) ? $response['data']['data'] : array();
             
-            ob_start();
-            ?>
-            <table class="wp-list-table widefat fixed striped">
-                <thead>
-                    <tr>
-                        <th><?php echo esc_html__('ID', 'joinotify-bling-erp'); ?></th>
-                        <th><?php echo esc_html__('Evento', 'joinotify-bling-erp'); ?></th>
-                        <th><?php echo esc_html__('URL', 'joinotify-bling-erp'); ?></th>
-                        <th><?php echo esc_html__('Status', 'joinotify-bling-erp'); ?></th>
-                        <th><?php echo esc_html__('Criado em', 'joinotify-bling-erp'); ?></th>
-                        <th><?php echo esc_html__('Ações', 'joinotify-bling-erp'); ?></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (empty($webhooks)) : ?>
-                        <tr>
-                            <td colspan="6"><?php echo esc_html__('Nenhum webhook configurado.', 'joinotify-bling-erp'); ?></td>
-                        </tr>
-                    <?php else : ?>
-                        <?php foreach ($webhooks as $webhook) : ?>
+            ob_start(); ?>
+
+            <div class="bling-webhooks-container">
+                <?php if (empty($webhooks)) : ?>
+                    <div class="notice notice-info">
+                        <p><?php echo esc_html__('Nenhum webhook configurado no Bling.', 'joinotify-bling-erp'); ?></p>
+                    </div>
+                <?php else : ?>
+                    <table class="wp-list-table widefat fixed striped">
+                        <thead>
                             <tr>
-                                <td><?php echo esc_html($webhook['id'] ?? '-'); ?></td>
-                                <td><?php echo esc_html($webhook['event'] ?? '-'); ?></td>
-                                <td style="word-break: break-all;"><?php echo esc_html($webhook['url'] ?? '-'); ?></td>
-                                <td>
-                                    <?php if (($webhook['status'] ?? '') === 'active') : ?>
-                                        <span class="bling-status-active"><?php echo esc_html__('Ativo', 'joinotify-bling-erp'); ?></span>
-                                    <?php else : ?>
-                                        <span class="bling-status-inactive"><?php echo esc_html__('Inativo', 'joinotify-bling-erp'); ?></span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <?php 
-                                    if (isset($webhook['created_at'])) {
-                                        echo esc_html(date_i18n('d/m/Y H:i', strtotime($webhook['created_at'])));
-                                    } else {
-                                        echo '-';
-                                    }
-                                    ?>
-                                </td>
-                                <td>
-                                    <button class="button button-small button-danger bling-delete-webhook" 
-                                            data-id="<?php echo esc_attr($webhook['id'] ?? ''); ?>">
-                                        <?php echo esc_html__('Excluir', 'joinotify-bling-erp'); ?>
-                                    </button>
-                                </td>
+                                <th><?php echo esc_html__('ID', 'joinotify-bling-erp'); ?></th>
+                                <th><?php echo esc_html__('Evento', 'joinotify-bling-erp'); ?></th>
+                                <th><?php echo esc_html__('URL', 'joinotify-bling-erp'); ?></th>
+                                <th><?php echo esc_html__('Status', 'joinotify-bling-erp'); ?></th>
+                                <th><?php echo esc_html__('Criado em', 'joinotify-bling-erp'); ?></th>
+                                <th><?php echo esc_html__('Ações', 'joinotify-bling-erp'); ?></th>
                             </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($webhooks as $webhook) : ?>
+                                <?php 
+                                // Verificar se os campos existem
+                                $webhook_id = $webhook['id'] ?? 0;
+                                $event = $webhook['event'] ?? 'Desconhecido';
+                                $url = $webhook['url'] ?? '';
+                                $status = $webhook['status'] ?? 'inactive';
+                                $created_at = $webhook['created_at'] ?? '';
+                                ?>
+                                <tr>
+                                    <td><?php echo esc_html($webhook_id); ?></td>
+                                    <td><?php echo esc_html($event); ?></td>
+                                    <td style="word-break: break-all;"><?php echo esc_html($url); ?></td>
+                                    <td>
+                                        <?php if ($status === 'active') : ?>
+                                            <span class="bling-status-active"><?php echo esc_html__('Ativo', 'joinotify-bling-erp'); ?></span>
+                                        <?php else : ?>
+                                            <span class="bling-status-inactive"><?php echo esc_html__('Inativo', 'joinotify-bling-erp'); ?></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php 
+                                        if (!empty($created_at)) {
+                                            echo esc_html(date_i18n('d/m/Y H:i', strtotime($created_at)));
+                                        } else {
+                                            echo '-';
+                                        }
+                                        ?>
+                                    </td>
+                                    <td>
+                                        <button class="button button-small button-danger bling-delete-webhook" 
+                                                data-id="<?php echo esc_attr($webhook_id); ?>"
+                                                data-nonce="<?php echo esc_attr(wp_create_nonce('bling_delete_webhook_' . $webhook_id)); ?>">
+                                            <?php echo esc_html__('Excluir', 'joinotify-bling-erp'); ?>
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
+            </div>
             <?php
             $html = ob_get_clean();
             
             wp_send_json_success(array(
                 'html' => $html,
                 'count' => count($webhooks),
+                'has_webhooks' => !empty($webhooks),
             ));
+            
         } catch (\Exception $e) {
+            error_log('Erro Bling get_webhooks: ' . $e->getMessage());
             wp_send_json_error(sprintf(
                 __('Erro ao obter webhooks: %s', 'joinotify-bling-erp'),
                 $e->getMessage()
@@ -453,7 +496,7 @@ class Ajax {
             }
             
             // Create invoice
-            $woocommerce_integration = new \MeuMouse\Joinotify\Bling\Integrations\WooCommerce();
+            $woocommerce_integration = new WooCommerce();
             $result = $woocommerce_integration::create_invoice_for_order($order);
             
             if (is_wp_error($result)) {
@@ -505,7 +548,7 @@ class Ajax {
             }
             
             // Get invoice details
-            $client = new \MeuMouse\Joinotify\Bling\API\Client();
+            $client = new Client();
             $response = $client::get_invoice($invoice_id);
             
             if (is_wp_error($response)) {
@@ -514,8 +557,8 @@ class Ajax {
             
             $invoice_data = isset($response['data']['data'][0]) ? $response['data']['data'][0] : array();
             
-            ob_start();
-            ?>
+            ob_start(); ?>
+
             <div class="bling-invoice-details">
                 <h4><?php echo esc_html__('Detalhes da Nota Fiscal', 'joinotify-bling-erp'); ?></h4>
                 
