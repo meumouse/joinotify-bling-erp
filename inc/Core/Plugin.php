@@ -107,7 +107,8 @@ class Plugin {
             'JOINOTIFY_BLING_ABSPATH'    => dirname( $base_file ) . '/',
             'JOINOTIFY_BLING_SLUG'       => self::SLUG,
             'JOINOTIFY_BLING_VERSION'    => self::VERSION,
-            'JOINOTIFY_BLING_DEBUG_MODE' => defined( 'WP_DEBUG' ) && WP_DEBUG,
+            'JOINOTIFY_BLING_DEBUG_MODE' => defined('WP_DEBUG') && WP_DEBUG,
+            'JOINOTIFY_BLING_DEV_MODE'   => true,
         );
 
         foreach ( $constants as $key => $value ) {

@@ -275,23 +275,6 @@ class Settings {
         <table class="form-table">
             <tr>
                 <th scope="row">
-                    <?php echo esc_html__('Sincronização em Massa', 'joinotify-bling-erp'); ?>
-                </th>
-                <td>
-                    <button id="bling-sync-all-products" class="button button-secondary">
-                        <?php echo esc_html__('Sincronizar Todos os Produtos', 'joinotify-bling-erp'); ?>
-                    </button>
-                    <button id="bling-sync-all-customers" class="button button-secondary">
-                        <?php echo esc_html__('Sincronizar Todos os Clientes', 'joinotify-bling-erp'); ?>
-                    </button>
-                    <p class="description">
-                        <?php echo esc_html__('Sincronize todos os produtos e clientes existentes com o Bling.', 'joinotify-bling-erp'); ?>
-                    </p>
-                </td>
-            </tr>
-            
-            <tr>
-                <th scope="row">
                     <?php echo esc_html__('Utilitários', 'joinotify-bling-erp'); ?>
                 </th>
                 <td>

@@ -105,7 +105,7 @@ class Ajax {
      * @return void
      */
     public static function bulk_sync_customers() {
-        check_ajax_referer('bling_bulk_sync', 'nonce');
+        check_ajax_referer('bling_admin_nonce', 'nonce');
         
         if (!current_user_can('manage_options')) {
             wp_die('Unauthorized');
@@ -196,7 +196,7 @@ class Ajax {
      * @return void
      */
     public static function clear_cache() {
-        check_ajax_referer('bling_clear_cache', 'nonce');
+        check_ajax_referer('bling_admin_nonce', 'nonce');
         
         if (!current_user_can('manage_options')) {
             wp_die('Unauthorized');
@@ -246,7 +246,7 @@ class Ajax {
      * @return void
      */
     public static function create_webhook() {
-        check_ajax_referer('bling_webhook', 'nonce');
+        check_ajax_referer('bling_admin_nonce', 'nonce');
         
         if (!current_user_can('manage_options')) {
             wp_die('Unauthorized');
@@ -294,7 +294,7 @@ class Ajax {
      * @return void
      */
     public static function delete_webhook() {
-        check_ajax_referer('bling_webhook', 'nonce');
+        check_ajax_referer('bling_admin_nonce', 'nonce');
         
         if (!current_user_can('manage_options')) {
             wp_die('Unauthorized');
@@ -466,7 +466,7 @@ class Ajax {
      * @return void
      */
     public static function create_invoice_for_order() {
-        check_ajax_referer('bling_order_action', 'nonce');
+        check_ajax_referer('bling_admin_nonce', 'nonce');
         
         if (!current_user_can('manage_woocommerce')) {
             wp_die('Unauthorized');
@@ -522,7 +522,7 @@ class Ajax {
      * @return void
      */
     public static function get_invoice_status() {
-        check_ajax_referer('bling_order_action', 'nonce');
+        check_ajax_referer('bling_admin_nonce', 'nonce');
         
         if (!current_user_can('manage_woocommerce')) {
             wp_die('Unauthorized');
@@ -643,7 +643,7 @@ class Ajax {
      * @return void
      */
     public static function sync_single_product() {
-        check_ajax_referer('bling_product_action', 'nonce');
+        check_ajax_referer('bling_admin_nonce', 'nonce');
         
         if (!current_user_can('manage_woocommerce')) {
             wp_die('Unauthorized');
@@ -695,7 +695,7 @@ class Ajax {
      * @return void
      */
     public static function get_product_status() {
-        check_ajax_referer('bling_product_action', 'nonce');
+        check_ajax_referer('bling_admin_nonce', 'nonce');
         
         if (!current_user_can('manage_woocommerce')) {
             wp_die('Unauthorized');

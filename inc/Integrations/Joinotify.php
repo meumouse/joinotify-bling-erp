@@ -155,7 +155,7 @@ if ( class_exists('MeuMouse\Joinotify\Integrations\Integrations_Base') ) {
         public function add_placeholders( $placeholders, $payload ) {
             // Only add placeholders for Bling integration triggers
             if ( isset( $payload['integration'] ) && $payload['integration'] === 'bling' ) {
-                $invoice = isset($payload['invoice_data']) ? $payload['invoice_data'] : array();
+                $invoice = isset( $payload['invoice_data'] ) ? $payload['invoice_data'] : array();
                 $trigger_names = array( 
                     'bling_invoice_created',
                     'bling_invoice_authorized',
@@ -221,7 +221,7 @@ if ( class_exists('MeuMouse\Joinotify\Integrations\Integrations_Base') ) {
             // Only show settings button if integration is enabled and plugin configured
             if ( Joinotify_Admin::get_setting('enable_bling_integration') === 'yes' ) {
                 $config_url = admin_url('admin.php?page=joinotify-bling');
-                echo '<p><a href="'. esc_url($config_url) .'" class="btn btn-outline-primary mb-5" target="_blank">' . esc_html__( 'Configurar', 'joinotify-bling-erp' ) . '</a></p>';
+                echo '<p><a href="'. esc_url( $config_url ) .'" class="btn btn-outline-primary mb-5" target="_blank">' . esc_html__( 'Configurar', 'joinotify-bling-erp' ) . '</a></p>';
             } else {
                 echo '<p class="description">' . esc_html__( 'Após ativar, configure o Bling em Joinotify > Bling ERP.', 'joinotify-bling-erp' ) . '</p>';
             }

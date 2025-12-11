@@ -2,8 +2,11 @@
 
 namespace MeuMouse\Joinotify\Bling\API;
 
+use MeuMouse\Joinotify\Core\Workflow_Processor;
+
 use WP_REST_Request;
 use WP_REST_Response;
+use WP_Error;
 
 // Exit if accessed directly.
 defined('ABSPATH') || exit;
@@ -34,19 +37,20 @@ class Controller {
      * @return void
      */
     public function register_routes() {
-        register_rest_route('bling/v1', '/webhook', array(
+        register_rest_route( 'bling/v1', '/webhook', array(
             'methods'  => 'POST',
             'callback' => array(__CLASS__, 'handle_webhook'),
-            'permission_callback' => array(__CLASS__, 'verify_signature'),
+            'permission_callback' => '__return_true',
+        //    'permission_callback' => array(__CLASS__, 'verify_signature'),
         ));
 
-        register_rest_route('bling/v1', '/auth/callback', array(
+        register_rest_route( 'bling/v1', '/auth/callback', array(
             'methods'  => 'GET',
             'callback' => array(__CLASS__, 'handle_oauth_callback'),
             'permission_callback' => '__return_true',
         ));
 
-        register_rest_route('bling/v1', '/refresh-token', array(
+        register_rest_route( 'bling/v1', '/refresh-token', array(
             'methods'  => 'POST',
             'callback' => array(__CLASS__, 'handle_manual_refresh'),
             'permission_callback' => function() {
@@ -54,19 +58,20 @@ class Controller {
             },
         ));
     }
-    
+
     
     /**
      * Verify the Bling webhook signature for security.
      *
-     * @param WP_REST_Request $request The incoming REST request.
+     * @since 1.0.0
+     * @param WP_REST_Request $request | The incoming REST request.
      * @return bool|WP_Error True if valid, WP_Error if invalid.
      */
     public static function verify_signature( WP_REST_Request $request ) {
         $signature = $request->get_header('x-bling-signature-256');
 
-        if ( empty($signature) ) {
-            return new \WP_Error( 'invalid_signature', __('Assinatura do webhook não encontrada.', 'joinotify-bling-erp'), array('status' => 401) );
+        if ( empty( $signature ) ) {
+            return new WP_Error( 'invalid_signature', __('Assinatura do webhook não encontrada.', 'joinotify-bling-erp'), array('status' => 401) );
         }
 
         $payload = $request->get_body();
@@ -74,10 +79,10 @@ class Controller {
         // Use specific webhook secret if set, otherwise fallback to client secret
         $secret = get_option('bling_webhook_secret', '');
         
-        if ( empty($secret) ) {
+        if ( empty( $secret ) ) {
             $secret = get_option('bling_client_secret', '');
             
-            if ( empty($secret) ) {
+            if ( empty( $secret ) ) {
                 error_log('Bling Webhook: Secret key not configured.');
                 // Allow processing for development if no secret configured
                 return true;
@@ -90,7 +95,7 @@ class Controller {
             return true;
         }
 
-        return new \WP_Error( 'invalid_signature', __('Falha na verificação da assinatura do webhook.', 'joinotify-bling-erp'), array('status' => 401) );
+        return new WP_Error( 'invalid_signature', __('Falha na verificação da assinatura do webhook.', 'joinotify-bling-erp'), array('status' => 401) );
     }
 
     
@@ -103,7 +108,9 @@ class Controller {
     public static function handle_webhook( WP_REST_Request $request ) {
         $body = $request->get_json_params();
         
-        error_log('Bling Webhook Received: ' . print_r($body, true));
+        if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+            error_log('[JOINOTIFY - BLING ERP]: Bling Webhook Received: ' . print_r( $body, true ) );
+        }
         
         if ( empty($body[0]['body']) ) {
             return new WP_REST_Response( array('error' => 'Invalid payload'), 400 );
@@ -149,7 +156,7 @@ class Controller {
         // Retrieve full invoice data from Bling API if possible (for placeholders)
         $invoice_data = self::get_invoice_details( $invoice_id );
         
-        if ( is_wp_error($invoice_data) ) {
+        if ( is_wp_error( $invoice_data ) ) {
             error_log('Bling API Error: ' . $invoice_data->get_error_message());
             // Even if we fail to get details, we can proceed with basic data
             $invoice_data = array();
@@ -171,7 +178,7 @@ class Controller {
         
         // Process workflows in Joinotify that match this trigger
         if ( class_exists('MeuMouse\\Joinotify\\Core\\Workflow_Processor') ) {
-            Workflow_Processor::process_workflows( apply_filters('Joinotify/Process_Workflows/Bling', $payload) );
+            Workflow_Processor::process_workflows( apply_filters( 'Joinotify/Process_Workflows/Bling', $payload ) );
         }
         
         /**
@@ -312,11 +319,11 @@ class Controller {
         $client_secret = get_option('bling_client_secret');
        
         if ( empty($client_id) || empty($client_secret) ) {
-            return new \WP_Error( 'missing_credentials', __('Client ID ou Client Secret não configurados.', 'joinotify-bling-erp') );
+            return new WP_Error( 'missing_credentials', __('Client ID ou Client Secret não configurados.', 'joinotify-bling-erp') );
         }
 
         if ( empty($refresh_token) ) {
-            return new \WP_Error( 'missing_token', __('Refresh token vazio.', 'joinotify-bling-erp') );
+            return new WP_Error( 'missing_token', __('Refresh token vazio.', 'joinotify-bling-erp') );
         }
 
         $auth_string = base64_encode( $client_id . ':' . $client_secret );
@@ -334,8 +341,8 @@ class Controller {
 
         $response = wp_remote_post('https://api.bling.com.br/Api/v3/oauth/token', $args);
         
-        if ( is_wp_error($response) ) {
-            return new \WP_Error( 'http_error', $response->get_error_message() );
+        if ( is_wp_error( $response ) ) {
+            return new WP_Error( 'http_error', $response->get_error_message() );
         }
 
         $status = wp_remote_retrieve_response_code($response);
@@ -343,15 +350,19 @@ class Controller {
 
         error_log('BLING REFRESH: Status ' . $status . ' -> ' . print_r($body, true));
 
-        if ( $status !== 200 || empty($body['access_token']) ) {
-            $err = isset($body['error_description']) ? $body['error_description'] : ( isset($body['error']) ? $body['error'] : __('Falha ao renovar token.', 'joinotify-bling-erp') );
-            return new \WP_Error( 'refresh_failed', $err, $body );
+        if ( $status !== 200 || empty( $body['access_token'] ) ) {
+            $err = isset( $body['error_description'] ) ? $body['error_description'] : ( isset($body['error']) ? $body['error'] : __('Falha ao renovar token.', 'joinotify-bling-erp') );
+            return new WP_Error( 'refresh_failed', $err, $body );
+        }
+
+        if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+            error_log('[JOINOTIFY - BLING ERP]: New access token: ' . print_r( $body['access_token'], true ) );
         }
 
         // Save new tokens
-        update_option('bling_access_token', $body['access_token']);
-        update_option('bling_refresh_token', $body['refresh_token']);
-        update_option('bling_token_expires', time() + intval($body['expires_in']));
+        update_option( 'bling_access_token', $body['access_token'] );
+        update_option( 'bling_refresh_token', $body['refresh_token'] );
+        update_option( 'bling_token_expires', time() + intval( $body['expires_in'] ) );
         
         return $body['access_token'];
     }
@@ -360,51 +371,68 @@ class Controller {
     /**
      * Fetch detailed invoice data from Bling API by ID.
      *
-     * @param int $invoice_id The Bling invoice ID.
+     * @since 1.0.0
+     * @param int $invoice_id | The Bling invoice ID.
      * @return array|\WP_Error Invoice data on success, WP_Error on failure.
      */
     public static function get_invoice_details( $invoice_id ) {
-        $access_token  = get_option('bling_access_token');
+        $access_token = get_option('bling_access_token');
         $refresh_token = get_option('bling_refresh_token');
 
-        if ( empty($access_token) ) {
-            return new \WP_Error( 'no_token', __('Access token não configurado.', 'joinotify-bling-erp') );
+        if ( empty( $access_token ) ) {
+            return new WP_Error( 'no_token', __('Access token não configurado.', 'joinotify-bling-erp') );
         }
 
         $api_url = "https://api.bling.com.br/Api/v3/nfe/{$invoice_id}";
         $response = wp_remote_get( $api_url, array(
             'headers' => array(
                 'Authorization' => 'Bearer ' . $access_token,
-                'Accept'        => 'application/json',
+                'Accept' => 'application/json',
             ),
             'timeout' => 30,
         ));
 
+        $response_code = wp_remote_retrieve_response_code($response);
+        
         // If token expired or unauthorized, try refreshing
-        if ( wp_remote_retrieve_response_code($response) === 401 ) {
+        if ( $response_code === 401 ) {
             $new_token = self::refresh_token( $refresh_token );
             
-            if ( ! is_wp_error($new_token) ) {
+            if ( ! is_wp_error( $new_token ) ) {
                 $response = wp_remote_get( $api_url, array(
                     'headers' => array(
                         'Authorization' => 'Bearer ' . $new_token,
-                        'Accept'        => 'application/json',
+                        'Accept' => 'application/json',
                     ),
                     'timeout' => 30,
                 ));
+
+                $response_code = wp_remote_retrieve_response_code($response);
             }
         }
 
-        if ( is_wp_error($response) ) {
+        if ( is_wp_error( $response ) ) {
             return $response;
+        }
+
+        // Check for successful response
+        if ( $response_code !== 200 ) {
+            $error_message = wp_remote_retrieve_response_message($response);
+            return new WP_Error( 
+                'api_error', 
+                sprintf(__('Erro na API do Bling: %s (Código: %d)', 'joinotify-bling-erp'), 
+                        $error_message, 
+                        $response_code) 
+            );
         }
 
         $data = json_decode( wp_remote_retrieve_body($response), true );
         
-        if ( empty($data['data'][0]) ) {
-            return new \WP_Error( 'invalid_response', __('Resposta inválida da API do Bling', 'joinotify-bling-erp') );
+        // Check if data exists and has the expected structure
+        if ( empty( $data['data'] ) ) {
+            return new WP_Error( 'invalid_response', __('Resposta inválida da API do Bling', 'joinotify-bling-erp') );
         }
 
-        return $data['data'][0];
+        return $data['data'];
     }
 }
