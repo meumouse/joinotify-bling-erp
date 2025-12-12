@@ -160,19 +160,21 @@ class Woocommerce {
      * @param WC_Order $order WooCommerce order.
      * @return int|\WP_Error Invoice ID or error.
      */
-    public function create_invoice_for_order($order) {
+    public function create_invoice_for_order( $order ) {
         try {
             // First, ensure customer exists in Bling if sync is enabled
             $customer_id = null;
-            if ($this->config['sync_customers']) {
-                $customer_id = $this->sync_order_customer_to_bling($order);
-                if (is_wp_error($customer_id)) {
+
+            if ( $this->config['sync_customers'] ) {
+                $customer_id = $this->sync_order_customer_to_bling( $order );
+
+                if ( is_wp_error( $customer_id ) ) {
                     return $customer_id;
                 }
             }
             
             // Prepare invoice data
-            $invoice_data = $this->prepare_invoice_data($order, $customer_id);
+            $invoice_data = $this->prepare_invoice_data( $order, $customer_id );
             
             // Add send email flag if configured
             if ( $this->config['send_email'] ) {
@@ -180,7 +182,11 @@ class Woocommerce {
             }
             
             // Create invoice in Bling
-            $response = Client::create_invoice($invoice_data);
+            $response = Client::create_invoice( $invoice_data );
+
+            if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+                error_log( '[JOINOTIFY - BLING ERP]: Criando NF: ' . print_r( $response, true ) );
+            }
             
             if ( is_wp_error( $response ) ) {
                 return new WP_Error('api_error', sprintf(
@@ -189,11 +195,11 @@ class Woocommerce {
                 ));
             }
             
-            if ( ! isset( $response['data']['data'][0]['id'] ) ) {
-                return new WP_Error('invoice_creation_failed', 'Falha ao criar nota fiscal no Bling');
+            if ( ! isset( $response['data'][0]['id'] ) ) {
+                return new WP_Error( 'invoice_creation_failed', sprintf( __( 'Falha ao criar nota fiscal no Bling: %s', 'joinotify-bling-erp' ), print_r( $response['data']['error'], true ) ) );
             }
             
-            $invoice_id = $response['data']['data'][0]['id'];
+            $invoice_id = $response['data'][0]['id'];
             
             // Save invoice ID to order meta
             $order->update_meta_data( '_bling_invoice_id', $invoice_id );
@@ -249,29 +255,36 @@ class Woocommerce {
         
         // Skip if no CPF/CNPJ
         if ( empty( $customer_data['numeroDocumento'] ) ) {
+            if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+                error_log( '[JOINOTIFY - BLING ERP]: Cliente não possui CPF/CNPJ cadastrado. ' . print_r( $customer_data, true ) );
+            }
+
             return new WP_Error('missing_document', 'Cliente não possui CPF/CNPJ cadastrado');
         }
         
         // Check if contact already exists by CPF/CNPJ
-        $existing = $this->find_contact_by_document( $customer_data['numeroDocumento'] );
+        $existing_contact_id = $this->find_contact_by_document( $customer_data['numeroDocumento'] );
 
-        if ( ! is_wp_error( $existing ) && $existing ) {
-            // Update existing contact
-            $response = Client::request( 'PUT', '/contatos/' . $existing, $customer_data );
-        } else {
-            // Create new contact
-            $response = Client::save_contact( $customer_data );
+        if ( ! is_wp_error( $existing_contact_id ) && $existing_contact_id ) {
+            return $existing_contact_id;
+        }
+
+        // Create new contact
+        $response = Client::save_contact( $customer_data );
+
+        if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+            error_log( '[JOINOTIFY - BLING ERP]: Resposta ao criar cliente. ' . print_r( $response, true ) );
         }
         
         if ( is_wp_error( $response ) ) {
             return $response;
         }
         
-        if ( ! isset( $response['data']['data'][0]['id'] ) ) {
+        if ( ! isset( $response['data'][0]['id'] ) ) {
             return new WP_Error('customer_sync_failed', 'Falha ao sincronizar cliente com Bling');
         }
         
-        $contact_id = $response['data']['data'][0]['id'];
+        $contact_id = $response['data'][0]['id'];
         
         // Save contact ID to user meta for future use
         if ( $user_id ) {
@@ -290,18 +303,42 @@ class Woocommerce {
      * @return int|false Contact ID or false if not found
      */
     private function find_contact_by_document( $document ) {
+        $clean_document = preg_replace('/[^0-9]/', '', $document);
+        
+        if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+            error_log( '[JOINOTIFY - BLING ERP]: Buscando contato por documento: ' . $clean_document );
+        }
+        
         $response = Client::get_contacts( array(
-            'numeroDocumento' => $document,
+            'numeroDocumento' => $clean_document,
             'limite' => 1
         ));
         
-        if ( is_wp_error( $response ) || empty( $response['data'] ) || empty( $response['data'][0] ) ) {
+        if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+            error_log( '[JOINOTIFY - BLING ERP]: Resposta da busca por documento: ' . print_r( $response, true ) );
+        }
+        
+        if ( is_wp_error( $response ) ) {
             return false;
         }
         
-        return $response['data'][0]['id'];
+        if ( isset( $response['data']['data'][0]['id'] ) ) {
+            $contact_id = $response['data']['data'][0]['id'];
+            
+            if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+                error_log( '[JOINOTIFY - BLING ERP]: Contato encontrado. ID: ' . $contact_id );
+            }
+
+            return $contact_id;
+        }
+        
+        if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+            error_log( '[JOINOTIFY - BLING ERP]: Estrutura da resposta não contém o ID esperado.' );
+        }
+        
+        return false;
     }
-    
+
 
     /**
      * Prepare customer data for Bling
@@ -314,22 +351,25 @@ class Woocommerce {
         $billing_cpf = $order->get_meta('_billing_cpf');
         $billing_cnpj = $order->get_meta('_billing_cnpj');
         
-        return array(
+        return apply_filters( 'Joinotify/Bling/Prepare_Customer_Data', array(
             'nome' => $order->get_formatted_billing_full_name(),
             'tipo' => $billing_cnpj ? 'J' : 'F', // J = Jurídica, F = Física
             'numeroDocumento' => $billing_cnpj ?: $billing_cpf,
+            'situacao' => 'A',
             'email' => $order->get_billing_email(),
             'telefone' => $this->format_phone( $order->get_billing_phone() ),
             'endereco' => array(
-                'endereco' => $order->get_billing_address_1(),
-                'numero' => $order->get_meta('_billing_number') ?: 'S/N',
-                'complemento' => $order->get_billing_address_2(),
-                'bairro' => $order->get_meta('_billing_neighborhood') ?: '',
-                'cep' => preg_replace('/[^0-9]/', '', $order->get_billing_postcode()),
-                'cidade' => $order->get_billing_city(),
-                'uf' => $order->get_billing_state(),
+                'geral' => array(
+                    'endereco' => $order->get_billing_address_1(),
+                    'numero' => $order->get_meta('_billing_number') ?: 'S/N',
+                    'complemento' => $order->get_billing_address_2(),
+                    'bairro' => $order->get_meta('_billing_neighborhood') ?: '',
+                    'cep' => preg_replace('/[^0-9]/', '', $order->get_billing_postcode()),
+                    'municipio' => $order->get_billing_city(),
+                    'uf' => $order->get_billing_state(),
+                )
             ),
-        );
+        ));
     }
     
 
