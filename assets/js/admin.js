@@ -33,7 +33,6 @@
             Bling.UI.init();
             Bling.Ajax.init();
             Bling.Settings.init();
-        //    Bling.Webhooks.init();
             Bling.Products.init();
             Bling.Orders.init();
         },
@@ -82,6 +81,7 @@
         initTooltips: function() {
             $('.bling-tooltip').each(function() {
                 var title = $(this).data('title');
+                
                 if (title) {
                     $(this).attr('title', title);
                 }
@@ -183,6 +183,7 @@
                 }
                 return true;
             }
+
             return false;
         }
     };
@@ -235,6 +236,7 @@
                 },
                 success: function(response) {
                     Bling.UI.hideLoading($button);
+
                     if (response.success) {
                         Bling.UI.showSuccess(response.data.message || bling_admin.strings.sync_complete);
                     } else {
@@ -270,6 +272,7 @@
                 },
                 success: function(response) {
                     Bling.UI.hideLoading($button);
+
                     if (response.success) {
                         Bling.UI.showSuccess(response.data.message || bling_admin.strings.sync_complete);
                     } else {
@@ -301,6 +304,7 @@
                 },
                 success: function(response) {
                     Bling.UI.hideLoading($button);
+
                     if (response.success) {
                         Bling.UI.showSuccess(response.data || bling_admin.strings.connection_success);
                     } else {
@@ -336,6 +340,7 @@
                 },
                 success: function(response) {
                     Bling.UI.hideLoading($button);
+
                     if (response.success) {
                         Bling.UI.showSuccess(response.data.message || bling_admin.strings.cache_cleared);
                     } else {
@@ -364,6 +369,7 @@
                 data: formData,
                 success: function(response) {
                     Bling.UI.hideLoading($submitButton);
+
                     if (response.success) {
                         Bling.UI.showSuccess(bling_admin.strings.settings_saved);
                     } else {
@@ -400,144 +406,6 @@
             } else {
                 $('.bling-trigger-statuses').hide();
             }
-        }
-    };
-
-    /**
-     * Webhooks Module
-     */
-    Bling.Webhooks = {
-        init: function() {
-            this.bindEvents();
-            this.loadWebhooks();
-        },
-
-        bindEvents: function() {
-            // Handle create webhook form
-            $('#bling-create-webhook').on('submit', this.handleCreateWebhook.bind(this));
-            
-            // Handle delete webhook
-            $(document).on('click', '.bling-delete-webhook', this.handleDeleteWebhook.bind(this));
-            
-            // Handle refresh webhooks
-            $('#bling-refresh-webhooks').on('click', this.loadWebhooks.bind(this));
-        },
-
-        loadWebhooks: function() {
-            var $container = $('#bling-webhooks-list');
-            $container.html('<p>' + bling_admin.strings.loading + '</p>');
-            
-            $.ajax({
-                url: bling_admin.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'bling_get_webhooks',
-                    nonce: bling_admin.nonce
-                },
-                success: function(response) {
-                    if (response.success) {
-                        $container.html(response.data.html);
-                        Bling.UI.showSuccess(bling_admin.strings.webhook_loaded);
-                    } else {
-                        $container.html('<p class="bling-alert-error">' + response.data + '</p>');
-                        Bling.UI.showError(response.data);
-                    }
-                },
-                error: function(xhr, status, error) {
-                    $container.html('<p class="bling-alert-error">' + bling_admin.strings.error + ': ' + error + '</p>');
-                    Bling.UI.showError(bling_admin.strings.error + ': ' + error);
-                }
-            });
-        },
-
-        handleCreateWebhook: function(e) {
-            e.preventDefault();
-            
-            var $form = $(e.currentTarget);
-            var $button = $form.find('button[type="submit"]');
-            
-            Bling.UI.showLoading($button);
-            
-            $.ajax({
-                url: bling_admin.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'bling_create_webhook',
-                    nonce: bling_admin.nonce,
-                    event: $('#webhook_event').val(),
-                    url: $('#webhook_url').val()
-                },
-                success: function(response) {
-                    Bling.UI.hideLoading($button);
-                    if (response.success) {
-                        Bling.UI.showSuccess(response.data || bling_admin.strings.webhook_created);
-                        $form[0].reset();
-                        Bling.Webhooks.loadWebhooks();
-                    } else {
-                        Bling.UI.showError(response.data || bling_admin.strings.error);
-                    }
-                },
-                error: function(xhr, status, error) {
-                    Bling.UI.hideLoading($button);
-                    Bling.UI.showError(bling_admin.strings.error + ': ' + error);
-                }
-            });
-        },
-
-        handleDeleteWebhook: function(e) {
-            e.preventDefault();
-            
-            if (!Bling.UI.confirm(bling_admin.strings.confirm_delete)) {
-                return;
-            }
-            
-            var $button = $(e.currentTarget);
-            var webhookId = $button.data('id');
-            
-            Bling.UI.showLoading($button);
-            
-            $.ajax({
-                url: bling_admin.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'bling_delete_webhook',
-                    nonce: bling_admin.nonce,
-                    webhook_id: webhookId
-                },
-                success: function(response) {
-                    Bling.UI.hideLoading($button);
-                    if (response.success) {
-                        Bling.UI.showSuccess(response.data || bling_admin.strings.webhook_deleted);
-                        $button.closest('tr').fadeOut(300, function() {
-                            $(this).remove();
-                        });
-                    } else {
-                        Bling.UI.showError(response.data || bling_admin.strings.error);
-                    }
-                },
-                error: function(xhr, status, error) {
-                    Bling.UI.hideLoading($button);
-                    Bling.UI.showError(bling_admin.strings.error + ': ' + error);
-                }
-            });
-        }
-    };
-
-    /**
-     * Products Module
-     */
-    Bling.Products = {
-        init: function() {
-            // This would be initialized on product pages
-        }
-    };
-
-    /**
-     * Orders Module
-     */
-    Bling.Orders = {
-        init: function() {
-            // This would be initialized on order pages
         }
     };
 

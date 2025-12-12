@@ -31,7 +31,7 @@ class Hooks {
      * @param array $payload | Hook payload
      * @return void
      */
-    private function handle_invoice_authorized( $payload ) {
+    public function handle_invoice_authorized( $payload ) {
         $invoice_data = $payload['invoice_data'] ?? array();
         $invoice_id = $payload['invoice_id'] ?? 0;
         

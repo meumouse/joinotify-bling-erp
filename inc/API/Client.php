@@ -16,6 +16,7 @@ class Client {
     /**
      * Get authenticated headers for API requests.
      *
+     * @since 1.0.0
      * @return array Headers array.
      */
     private static function get_headers() {
@@ -28,9 +29,11 @@ class Client {
         );
     }
     
+
     /**
      * Make API request to Bling with token refresh handling.
      *
+     * @since 1.0.0
      * @param string $method HTTP method.
      * @param string $endpoint API endpoint.
      * @param array $data Request data.
@@ -68,7 +71,7 @@ class Client {
         // Check if token expired
         $status_code = wp_remote_retrieve_response_code($response);
         
-        if ($status_code === 401) {
+        if ( $status_code === 401 ) {
             // Try to refresh token
             $refresh_token = get_option('bling_refresh_token');
             $new_token = Controller::refresh_token($refresh_token);
@@ -113,11 +116,11 @@ class Client {
      * Get Bling categories for products.
      *
      * @since 1.0.0
-     * @param int $page Page number.
-     * @param int $limit Items per page.
+     * @param int $page | Page number.
+     * @param int $limit | Items per page.
      * @return array|\WP_Error Categories or error.
      */
-    public static function get_categories($page = 1, $limit = 100) {
+    public static function get_categories( $page = 1, $limit = 100 ) {
         $endpoint = '/categorias/produtos?pagina=' . $page . '&limite=' . $limit;
 
         return self::request('GET', $endpoint);
@@ -223,43 +226,8 @@ class Client {
         
         return self::request('GET', $endpoint);
     }
-    
 
-    /**
-     * Create a webhook in Bling.
-     *
-     * @since 1.0.0
-     * @param array $webhook_data | Webhook data.
-     * @return array|\WP_Error Created webhook or error.
-     */
-    public static function create_webhook($webhook_data) {
-        return self::request('POST', '/webhooks', $webhook_data);
-    }
 
-    
-    /**
-     * Get webhooks from Bling.
-     *
-     * @since 1.0.0
-     * @return array|\WP_Error Webhooks or error.
-     */
-    public static function get_webhooks() {
-        return self::request('GET', '/webhooks');
-    }
-    
-    
-    /**
-     * Delete a webhook in Bling.
-     *
-     * @since 1.0.0
-     * @param int $webhook_id | Webhook ID.
-     * @return array|\WP_Error Response or error.
-     */
-    public static function delete_webhook($webhook_id) {
-        return self::request('DELETE', '/webhooks/' . $webhook_id);
-    }
-    
-    
     /**
      * Get contacts from Bling.
      *
@@ -279,9 +247,11 @@ class Client {
         return self::request('GET', $endpoint);
     }
     
+
     /**
      * Create or update a contact in Bling.
      *
+     * @since 1.0.0
      * @param array $contact_data Contact data.
      * @return array|\WP_Error Created/updated contact or error.
      */

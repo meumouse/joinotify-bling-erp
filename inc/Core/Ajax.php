@@ -24,31 +24,26 @@ class Ajax {
      */
     public function __construct() {
         // Bulk sync handlers
-        add_action('wp_ajax_bling_bulk_sync_products', array(__CLASS__, 'bulk_sync_products'));
-        add_action('wp_ajax_bling_bulk_sync_customers', array(__CLASS__, 'bulk_sync_customers'));
+        add_action( 'wp_ajax_bling_bulk_sync_products', array( __CLASS__, 'bulk_sync_products' ) );
+        add_action( 'wp_ajax_bling_bulk_sync_customers', array( __CLASS__, 'bulk_sync_customers' ) );
         
         // Utility handlers
-        add_action('wp_ajax_bling_test_connection', array(__CLASS__, 'test_connection'));
-        add_action('wp_ajax_bling_clear_cache', array(__CLASS__, 'clear_cache'));
-        
-        // Webhook handlers
-    //    add_action('wp_ajax_bling_create_webhook', array(__CLASS__, 'create_webhook'));
-    //    add_action('wp_ajax_bling_delete_webhook', array(__CLASS__, 'delete_webhook'));
-    //    add_action('wp_ajax_bling_get_webhooks', array(__CLASS__, 'get_webhooks'));
+        add_action( 'wp_ajax_bling_test_connection', array( __CLASS__, 'test_connection' ) );
         
         // Order handlers
-        add_action('wp_ajax_bling_create_invoice_for_order', array(__CLASS__, 'create_invoice_for_order'));
-        add_action('wp_ajax_bling_get_invoice_status', array(__CLASS__, 'get_invoice_status'));
+        add_action( 'wp_ajax_bling_create_invoice_for_order', array( __CLASS__, 'create_invoice_for_order' ) );
+        add_action( 'wp_ajax_bling_get_invoice_status', array( __CLASS__, 'get_invoice_status' ) );
         
         // Product handlers
-        add_action('wp_ajax_bling_sync_single_product', array(__CLASS__, 'sync_single_product'));
-        add_action('wp_ajax_bling_get_product_status', array(__CLASS__, 'get_product_status'));
+        add_action( 'wp_ajax_bling_sync_single_product', array( __CLASS__, 'sync_single_product' ) );
+        add_action( 'wp_ajax_bling_get_product_status', array( __CLASS__, 'get_product_status' ) );
     }
 
     
     /**
      * Bulk sync products AJAX handler.
      *
+     * @since 1.0.0
      * @return void
      */
     public static function bulk_sync_products() {
@@ -102,6 +97,7 @@ class Ajax {
     /**
      * Bulk sync customers AJAX handler.
      *
+     * @since 1.0.0
      * @return void
      */
     public static function bulk_sync_customers() {
@@ -148,321 +144,53 @@ class Ajax {
     /**
      * Test connection AJAX handler.
      *
+     * @since 1.0.0
      * @return void
      */
     public static function test_connection() {
         check_ajax_referer('bling_admin_nonce', 'nonce');
         
-        if (!current_user_can('manage_options')) {
+        if ( ! current_user_can('manage_options') ) {
             wp_die('Unauthorized');
         }
         
         // Check if we have access token
         $access_token = get_option('bling_access_token');
         
-        if (empty($access_token)) {
+        if ( empty( $access_token ) ) {
             wp_send_json_error(__('Token de acesso não configurado. Configure as credenciais primeiro.', 'joinotify-bling-erp'));
         }
         
         // Test connection by fetching categories
         try {
             $client = new Client();
-            $response = $client::get_categories(1, 1);
+            $response = $client::get_categories( 1, 1 );
             
-            if (is_wp_error($response)) {
-                wp_send_json_error($response->get_error_message());
+            if ( is_wp_error( $response ) ) {
+                wp_send_json_error( $response->get_error_message() );
             }
             
-            if ($response['status'] === 200) {
-                wp_send_json_success(__('Conexão estabelecida com sucesso! A API do Bling está respondendo normalmente.', 'joinotify-bling-erp'));
+            if ( $response['status'] === 200 ) {
+                wp_send_json_success( __('Conexão estabelecida com sucesso! A API do Bling está respondendo normalmente.', 'joinotify-bling-erp') );
             } else {
-                wp_send_json_error(sprintf(
+                wp_send_json_error( sprintf(
                     __('Falha na conexão. Status HTTP: %d', 'joinotify-bling-erp'),
                     $response['status']
                 ));
             }
-        } catch (\Exception $e) {
-            wp_send_json_error(sprintf(
+        } catch ( \Exception $e ) {
+            wp_send_json_error( sprintf(
                 __('Erro ao testar conexão: %s', 'joinotify-bling-erp'),
                 $e->getMessage()
             ));
         }
     }
 
-    
-    /**
-     * Clear cache AJAX handler.
-     *
-     * @return void
-     */
-    public static function clear_cache() {
-        check_ajax_referer('bling_admin_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_die('Unauthorized');
-        }
-        
-        try {
-            // Clear transients and meta data
-            global $wpdb;
-            
-            // Delete Bling transients
-            $deleted_transients = $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_bling_%'");
-            $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_timeout_bling_%'");
-            
-            // Clear product sync meta
-            $deleted_product_meta = $wpdb->query("DELETE FROM {$wpdb->postmeta} WHERE meta_key IN ('_bling_product_id', '_bling_last_sync', '_bling_sync_error')");
-            
-            // Clear order sync meta
-            $deleted_order_meta = $wpdb->query("DELETE FROM {$wpdb->postmeta} WHERE meta_key IN ('_bling_invoice_id', '_bling_order_sync', '_bling_invoice_error')");
-            
-            // Clear user sync meta
-            $deleted_user_meta = $wpdb->query("DELETE FROM {$wpdb->usermeta} WHERE meta_key IN ('_bling_contact_id', '_bling_sync_date', '_bling_sync_error')");
-            
-            // Clear all cache
-            wp_cache_flush();
-            
-            wp_send_json_success(array(
-                'message' => __('Cache limpo com sucesso!', 'joinotify-bling-erp'),
-                'stats' => array(
-                    'transients' => $deleted_transients,
-                    'product_meta' => $deleted_product_meta,
-                    'order_meta' => $deleted_order_meta,
-                    'user_meta' => $deleted_user_meta,
-                ),
-            ));
-        } catch (\Exception $e) {
-            wp_send_json_error(sprintf(
-                __('Erro ao limpar cache: %s', 'joinotify-bling-erp'),
-                $e->getMessage()
-            ));
-        }
-    }
-    
-
-    /**
-     * Create webhook AJAX handler.
-     *
-     * @return void
-     */
-    public static function create_webhook() {
-        check_ajax_referer('bling_admin_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_die('Unauthorized');
-        }
-        
-        $event = sanitize_text_field($_POST['event'] ?? '');
-        $url = esc_url_raw($_POST['url'] ?? '');
-        
-        if (empty($event) || empty($url)) {
-            wp_send_json_error(__('Evento e URL são obrigatórios.', 'joinotify-bling-erp'));
-        }
-        
-        try {
-            $client = new Client();
-            $response = $client::create_webhook(array(
-                'event' => $event,
-                'url' => $url,
-                'status' => 'active',
-            ));
-            
-            if (is_wp_error($response)) {
-                wp_send_json_error($response->get_error_message());
-            }
-            
-            if ($response['status'] === 201 || $response['status'] === 200) {
-                wp_send_json_success(__('Webhook criado com sucesso!', 'joinotify-bling-erp'));
-            } else {
-                wp_send_json_error(sprintf(
-                    __('Erro ao criar webhook. Status: %d', 'joinotify-bling-erp'),
-                    $response['status']
-                ));
-            }
-        } catch (\Exception $e) {
-            wp_send_json_error(sprintf(
-                __('Erro ao criar webhook: %s', 'joinotify-bling-erp'),
-                $e->getMessage()
-            ));
-        }
-    }
-    
-
-    /**
-     * Delete webhook AJAX handler.
-     *
-     * @return void
-     */
-    public static function delete_webhook() {
-        check_ajax_referer('bling_admin_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_die('Unauthorized');
-        }
-        
-        $webhook_id = intval($_POST['webhook_id'] ?? 0);
-        
-        if (!$webhook_id) {
-            wp_send_json_error(__('ID do webhook é obrigatório.', 'joinotify-bling-erp'));
-        }
-        
-        try {
-            $client = new Client();
-            $response = $client::delete_webhook($webhook_id);
-            
-            if (is_wp_error($response)) {
-                wp_send_json_error($response->get_error_message());
-            }
-            
-            if ($response['status'] === 200 || $response['status'] === 204) {
-                wp_send_json_success(__('Webhook excluído com sucesso!', 'joinotify-bling-erp'));
-            } else {
-                wp_send_json_error(sprintf(
-                    __('Erro ao excluir webhook. Status: %d', 'joinotify-bling-erp'),
-                    $response['status']
-                ));
-            }
-        } catch (\Exception $e) {
-            wp_send_json_error(sprintf(
-                __('Erro ao excluir webhook: %s', 'joinotify-bling-erp'),
-                $e->getMessage()
-            ));
-        }
-    }
-    
-
-    /**
-     * Get webhooks AJAX handler.
-     *
-     * @since 1.0.0
-     * @return void
-     */
-    public static function get_webhooks() {
-        $nonce = $_POST['nonce'] ?? '';
-        
-        if (!wp_verify_nonce($nonce, 'bling_admin_nonce')) {
-            wp_send_json_error(__('Nonce de segurança inválido.', 'joinotify-bling-erp'), 403);
-        }
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(__('Permissão negada.', 'joinotify-bling-erp'), 403);
-        }
-        
-        try {
-            // Verificar se temos token de acesso
-            $access_token = get_option('bling_access_token');
-            
-            if (empty($access_token)) {
-                wp_send_json_error(__('Token de acesso não configurado. Configure as credenciais primeiro.', 'joinotify-bling-erp'));
-            }
-            
-            $client = new Client();
-            
-            // Verificar se o método get_webhooks existe na classe Client
-            if (!method_exists($client, 'get_webhooks')) {
-                wp_send_json_error(__('Método get_webhooks não encontrado na API Client.', 'joinotify-bling-erp'));
-            }
-            
-            $response = $client::get_webhooks();
-            
-            if (is_wp_error($response)) {
-                wp_send_json_error($response->get_error_message());
-            }
-            
-            // Verificar status da resposta
-            if ($response['status'] !== 200) {
-                wp_send_json_error(sprintf(
-                    __('Erro ao obter webhooks. Status: %d', 'joinotify-bling-erp'),
-                    $response['status']
-                ));
-            }
-            
-            $webhooks = isset($response['data']['data']) ? $response['data']['data'] : array();
-            
-            ob_start(); ?>
-
-            <div class="bling-webhooks-container">
-                <?php if (empty($webhooks)) : ?>
-                    <div class="notice notice-info">
-                        <p><?php echo esc_html__('Nenhum webhook configurado no Bling.', 'joinotify-bling-erp'); ?></p>
-                    </div>
-                <?php else : ?>
-                    <table class="wp-list-table widefat fixed striped">
-                        <thead>
-                            <tr>
-                                <th><?php echo esc_html__('ID', 'joinotify-bling-erp'); ?></th>
-                                <th><?php echo esc_html__('Evento', 'joinotify-bling-erp'); ?></th>
-                                <th><?php echo esc_html__('URL', 'joinotify-bling-erp'); ?></th>
-                                <th><?php echo esc_html__('Status', 'joinotify-bling-erp'); ?></th>
-                                <th><?php echo esc_html__('Criado em', 'joinotify-bling-erp'); ?></th>
-                                <th><?php echo esc_html__('Ações', 'joinotify-bling-erp'); ?></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($webhooks as $webhook) : ?>
-                                <?php 
-                                // Verificar se os campos existem
-                                $webhook_id = $webhook['id'] ?? 0;
-                                $event = $webhook['event'] ?? 'Desconhecido';
-                                $url = $webhook['url'] ?? '';
-                                $status = $webhook['status'] ?? 'inactive';
-                                $created_at = $webhook['created_at'] ?? '';
-                                ?>
-                                <tr>
-                                    <td><?php echo esc_html($webhook_id); ?></td>
-                                    <td><?php echo esc_html($event); ?></td>
-                                    <td style="word-break: break-all;"><?php echo esc_html($url); ?></td>
-                                    <td>
-                                        <?php if ($status === 'active') : ?>
-                                            <span class="bling-status-active"><?php echo esc_html__('Ativo', 'joinotify-bling-erp'); ?></span>
-                                        <?php else : ?>
-                                            <span class="bling-status-inactive"><?php echo esc_html__('Inativo', 'joinotify-bling-erp'); ?></span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?php 
-                                        if (!empty($created_at)) {
-                                            echo esc_html(date_i18n('d/m/Y H:i', strtotime($created_at)));
-                                        } else {
-                                            echo '-';
-                                        }
-                                        ?>
-                                    </td>
-                                    <td>
-                                        <button class="button button-small button-danger bling-delete-webhook" 
-                                                data-id="<?php echo esc_attr($webhook_id); ?>"
-                                                data-nonce="<?php echo esc_attr(wp_create_nonce('bling_delete_webhook_' . $webhook_id)); ?>">
-                                            <?php echo esc_html__('Excluir', 'joinotify-bling-erp'); ?>
-                                        </button>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                <?php endif; ?>
-            </div>
-            <?php
-            $html = ob_get_clean();
-            
-            wp_send_json_success(array(
-                'html' => $html,
-                'count' => count($webhooks),
-                'has_webhooks' => !empty($webhooks),
-            ));
-            
-        } catch (\Exception $e) {
-            error_log('Erro Bling get_webhooks: ' . $e->getMessage());
-            wp_send_json_error(sprintf(
-                __('Erro ao obter webhooks: %s', 'joinotify-bling-erp'),
-                $e->getMessage()
-            ));
-        }
-    }
-    
 
     /**
      * Create invoice for order AJAX handler.
      *
+     * @since 1.0.0
      * @return void
      */
     public static function create_invoice_for_order() {
@@ -519,6 +247,7 @@ class Ajax {
     /**
      * Get invoice status AJAX handler.
      *
+     * @since 1.0.0
      * @return void
      */
     public static function get_invoice_status() {
@@ -640,6 +369,7 @@ class Ajax {
     /**
      * Sync single product AJAX handler.
      *
+     * @since 1.0.0
      * @return void
      */
     public static function sync_single_product() {
@@ -692,6 +422,7 @@ class Ajax {
     /**
      * Get product sync status AJAX handler.
      *
+     * @since 1.0.0
      * @return void
      */
     public static function get_product_status() {
@@ -777,8 +508,8 @@ class Ajax {
                     </button>
                 </p>
             </div>
-            <?php
-            $html = ob_get_clean();
+
+            <?php $html = ob_get_clean();
             
             wp_send_json_success(array(
                 'html' => $html,
