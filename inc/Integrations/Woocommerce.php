@@ -584,19 +584,64 @@ class Woocommerce {
                 
                 // Try to get invoice details from meta first
                 $invoice_number = $order->get_meta('_bling_invoice_number');
-
                 if ( $invoice_number ) {
                     echo '<p>' . __('Número:', 'joinotify-bling-erp') . ' ' . esc_html( $invoice_number ) . '</p>';
                 }
                 
-                // Add button to view in Bling
-                echo '<p><a href="https://www.bling.com.br/nfe/' . esc_attr( $invoice_id ) . '" target="_blank" class="button button-small">';
-                echo __('Ver no Bling', 'joinotify-bling-erp');
-                echo '</a></p>';
+                // Get DANFE link from order meta (stored from webhook)
+                $danfe_link = $order->get_meta('_bling_danfe_link');
+                
+                // If we don't have the DANFE link stored, try to get it from API
+                if ( empty( $danfe_link ) ) {
+                    $danfe_link = $this->get_danfe_link_from_api( $invoice_id );
+                }
+                
+                // Display DANFE link button if available
+                if ( ! empty( $danfe_link ) ) {
+                    echo '<p><a href="' . esc_url( $danfe_link ) . '" target="_blank" class="button button-small button-primary">';
+                        echo __('Consultar nota fiscal', 'joinotify-bling-erp');
+                    echo '</a></p>';
+                }
             } else {
                 echo '<p>' . __('Nenhuma nota fiscal criada no Bling para este pedido.', 'joinotify-bling-erp') . '</p>';
             }
         echo '</div>';
+    }
+
+
+    /**
+     * Get DANFE link from Bling API
+     *
+     * @since 1.0.0
+     * @param int $invoice_id Invoice ID from Bling
+     * @return string DANFE link or empty string
+     */
+    private function get_danfe_link_from_api( $invoice_id ) {
+        try {
+            $response = Client::get_invoice( $invoice_id );
+            
+            if ( is_wp_error( $response ) || ! isset( $response['data']['data'][0] ) ) {
+                return '';
+            }
+            
+            $invoice_data = $response['data']['data'][0];
+            
+            // Check for DANFE link in the response
+            if ( isset( $invoice_data['linkDanfe'] ) && ! empty( $invoice_data['linkDanfe'] ) ) {
+                return $invoice_data['linkDanfe'];
+            }
+            
+            // Alternative: construct link from chaveAcesso if available
+            if ( isset( $invoice_data['chaveAcesso'] ) && ! empty( $invoice_data['chaveAcesso'] ) ) {
+                return 'https://www.bling.com.br/doc.view.php?chaveAcesso=' . $invoice_data['chaveAcesso'];
+            }
+            
+            return '';
+            
+        } catch ( \Exception $e ) {
+            error_log( 'Erro ao buscar link DANFE: ' . $e->getMessage() );
+            return '';
+        }
     }
 
     
