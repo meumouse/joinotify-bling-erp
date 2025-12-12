@@ -2,6 +2,8 @@
 
 namespace MeuMouse\Joinotify\Bling\Core;
 
+use MeuMouse\Joinotify\Bling\Integrations\Woocommerce;
+
 // Exit if accessed directly.
 defined('ABSPATH') || exit;
 
@@ -21,10 +23,7 @@ class Assets {
      */
     public function __construct() {
         // Admin assets
-        add_action('admin_enqueue_scripts', array(__CLASS__, 'enqueue_admin_assets'));
-        
-        // Frontend assets (if needed)
-        add_action('wp_enqueue_scripts', array(__CLASS__, 'enqueue_frontend_assets'));
+        add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_admin_assets' ) );
     }
     
 
@@ -50,31 +49,8 @@ class Assets {
         // Localize script data
         self::localize_admin_scripts();
     }
-    
 
-    /**
-     * Enqueue frontend assets.
-     *
-     * @since 1.0.0
-     * @return void
-     */
-    public static function enqueue_frontend_assets() {
-        // Only load if needed
-        if (!self::frontend_needs_assets()) {
-            return;
-        }
-        
-        // Enqueue frontend CSS
-        self::enqueue_frontend_css();
-        
-        // Enqueue frontend JavaScript
-        self::enqueue_frontend_js();
-        
-        // Localize frontend script data
-        self::localize_frontend_scripts();
-    }
 
-    
     /**
      * Enqueue admin CSS files.
      *
@@ -145,55 +121,6 @@ class Assets {
         );
     }
 
-    
-    /**
-     * Enqueue frontend CSS files.
-     *
-     * @since 1.0.0
-     * @return void
-     */
-    private static function enqueue_frontend_css() {
-        wp_enqueue_style(
-            'joinotify-bling-frontend',
-            self::asset_url('css/frontend.css'),
-            array(),
-            self::get_version(),
-            'all'
-        );
-    }
-    
-
-    /**
-     * Enqueue frontend JavaScript files.
-     *
-     * @since 1.0.0
-     * @return void
-     */
-    private static function enqueue_frontend_js() {
-        wp_enqueue_script(
-            'joinotify-bling-frontend',
-            self::asset_url('js/frontend.js'),
-            array('jquery'),
-            self::get_version(),
-            true
-        );
-    }
-
-    
-    /**
-     * Localize frontend script data.
-     *
-     * @since 1.0.0
-     * @return void
-     */
-    private static function localize_frontend_scripts() {
-        wp_localize_script(
-            'joinotify-bling-frontend',
-            'bling_frontend',
-            self::get_frontend_localization_data()
-        );
-    }
-    
 
     /**
      * Get admin localization data.
@@ -254,7 +181,7 @@ class Assets {
             ),
             'urls' => array(
                 'admin_url' => admin_url(),
-                'plugin_url' => plugin_dir_url(dirname(dirname(__FILE__))), // Corrigido: Volta mais um nível
+                'plugin_url' => plugin_dir_url(dirname(dirname(__FILE__))),
                 'bling_dashboard' => 'https://www.bling.com.br',
                 'bling_api_docs' => 'https://ajuda.bling.com.br/hc/pt-br/categories/360002186394-API-para-Desenvolvedores',
             ),
@@ -272,28 +199,6 @@ class Assets {
         );
     }
 
-    
-    /**
-     * Get frontend localization data.
-     *
-     * @since 1.0.0
-     * @return array Localization data.
-     */
-    private static function get_frontend_localization_data() {
-        return array(
-            'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('bling_frontend_nonce'),
-            'strings' => array(
-                'loading' => __('Carregando...', 'joinotify-bling-erp'),
-                'error' => __('Ocorreu um erro. Tente novamente.', 'joinotify-bling-erp'),
-            ),
-            'urls' => array(
-                'checkout_url' => wc_get_checkout_url(),
-                'account_url' => wc_get_account_endpoint_url('dashboard'),
-            ),
-        );
-    }
-    
 
     /**
      * Check if current page is a Bling admin page.
@@ -312,7 +217,7 @@ class Assets {
         }
         
         // Check for product or order edit pages with Bling meta boxes
-        if ( self::is_product_page( $hook ) || self::is_order_page( $hook ) ) {
+        if ( self::is_product_page( $hook ) || $hook === Woocommerce::get_orders_page() ) {
             return true;
         }
         
@@ -359,7 +264,7 @@ class Assets {
         // Check if we're on product or order pages
         global $pagenow, $post_type;
 
-        return in_array($pagenow, array('post.php', 'post-new.php')) && in_array($post_type, array('product', 'shop_order'));
+        return in_array( $pagenow, array( 'post.php', 'post-new.php' ) ) && in_array( $post_type, array( 'product', 'shop_order' ) );
     }
     
 
@@ -370,7 +275,7 @@ class Assets {
      * @return bool
      */
     private static function needs_woocommerce_css() {
-        return self::is_product_page($GLOBALS['pagenow'] ?? '') || self::is_order_page($GLOBALS['pagenow'] ?? '');
+        return self::is_product_page($GLOBALS['pagenow'] ?? '') || $GLOBALS['pagenow'] === Woocommerce::get_orders_page();
     }
     
 
@@ -381,30 +286,7 @@ class Assets {
      * @return bool
      */
     private static function needs_woocommerce_js() {
-        return self::is_product_page($GLOBALS['pagenow'] ?? '') || self::is_order_page($GLOBALS['pagenow'] ?? '');
-    }
-    
-
-    /**
-     * Check if frontend needs assets.
-     *
-     * @since 1.0.0
-     * @return bool
-     */
-    private static function frontend_needs_assets() {
-        // Check if we're on a page that needs Bling assets
-        if (is_account_page()) {
-            return true;
-        }
-        
-        // Check if we're on a checkout page with Bling integration
-        if (is_checkout()) {
-            $auto_create = get_option('bling_auto_create_invoice', 'yes');
-            
-            return $auto_create === 'yes' && !empty(get_option('bling_access_token'));
-        }
-        
-        return false;
+        return self::is_product_page( $GLOBALS['pagenow'] ?? '' ) || $GLOBALS['pagenow'] === Woocommerce::get_orders_page();
     }
     
     
@@ -418,14 +300,13 @@ class Assets {
         static $version = null;
         
         if ( $version === null ) {
-            if (defined('JOINOTIFY_BLING_VERSION')) {
+            if ( defined('JOINOTIFY_BLING_VERSION') ) {
                 $version = JOINOTIFY_BLING_VERSION;
             } else {
-                // Fallback: tenta obter do arquivo principal do plugin
-                $plugin_file = dirname(dirname(dirname(dirname(__FILE__)))) . '/joinotify-bling-erp.php';
+                $plugin_file = dirname( dirname( dirname( dirname(__FILE__) ) ) ) . '/joinotify-bling-erp.php';
                 
-                if (function_exists('get_plugin_data') && file_exists($plugin_file)) {
-                    $plugin_data = get_plugin_data($plugin_file);
+                if ( function_exists('get_plugin_data') && file_exists( $plugin_file ) ) {
+                    $plugin_data = get_plugin_data( $plugin_file );
                     $version = $plugin_data['Version'] ?? '1.0.0';
                 } else {
                     $version = '1.0.0';
@@ -444,14 +325,14 @@ class Assets {
      * @param string $path | Asset path relative to assets directory.
      * @return string Full URL to asset.
      */
-    public static function asset_url($path) {
-        if (defined('JOINOTIFY_BLING_ASSETS')) {
-            return JOINOTIFY_BLING_ASSETS . ltrim($path, '/');
+    public static function asset_url( $path ) {
+        if ( defined('JOINOTIFY_BLING_ASSETS') ) {
+            return JOINOTIFY_BLING_ASSETS . ltrim( $path, '/' );
         }
         
-        $plugin_url = plugin_dir_url(dirname(dirname(dirname(__FILE__))));
+        $plugin_url = plugin_dir_url( dirname( dirname( dirname(__FILE__) ) ) );
         
-        return $plugin_url . 'assets/' . ltrim($path, '/');
+        return $plugin_url . 'assets/' . ltrim( $path, '/' );
     }
     
 
@@ -469,18 +350,19 @@ class Assets {
     /**
      * Get all WooCommerce order statuses for JavaScript.
      *
+     * @since 1.0.0
      * @return array Formatted statuses.
      */
     public static function get_wc_statuses_for_js() {
         $statuses = wc_get_order_statuses();
         $formatted = array();
         
-        foreach ($statuses as $key => $label) {
-            $clean_key = str_replace('wc-', '', $key);
+        foreach ( $statuses as $key => $label ) {
+            $clean_key = str_replace( 'wc-', '', $key );
             $formatted[] = array(
                 'value' => $clean_key,
                 'label' => $label,
-                'selected' => in_array($clean_key, (array)get_option('bling_invoice_trigger_statuses', array('completed'))),
+                'selected' => in_array( $clean_key, (array) get_option('bling_invoice_trigger_statuses', array('completed') ) ),
             );
         }
         
@@ -492,10 +374,11 @@ class Assets {
      * Add inline CSS for immediate styling needs.
      * Note: Use sparingly, prefer external CSS files.
      *
+     * @since 1.0.0
      * @return void
      */
     public static function add_critical_css() {
-        if (!self::is_bling_page($GLOBALS['pagenow'] ?? '')) {
+        if ( ! self::is_bling_page( $GLOBALS['pagenow'] ?? '' ) ) {
             return;
         }
         
