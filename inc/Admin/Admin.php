@@ -72,7 +72,7 @@ class Admin {
     public static function default_settings_tabs($tabs) {
         $default_tabs = array(
             'credentials' => __('Credenciais', 'joinotify-bling-erp'),
-            'webhooks' => __('Webhooks', 'joinotify-bling-erp'),
+        //    'webhooks' => __('Webhooks', 'joinotify-bling-erp'),
             'automation' => __('Automação', 'joinotify-bling-erp'),
         );
         

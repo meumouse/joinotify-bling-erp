@@ -33,7 +33,7 @@
             Bling.UI.init();
             Bling.Ajax.init();
             Bling.Settings.init();
-            Bling.Webhooks.init();
+        //    Bling.Webhooks.init();
             Bling.Products.init();
             Bling.Orders.init();
         },

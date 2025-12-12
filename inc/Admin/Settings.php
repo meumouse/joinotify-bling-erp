@@ -270,9 +270,9 @@ class Settings {
         
         <hr/>
         
-        <h3><?php echo esc_html__('Ferramentas', 'joinotify-bling-erp'); ?></h3>
+        <h3 style="display: none !important;"><?php echo esc_html__('Ferramentas', 'joinotify-bling-erp'); ?></h3>
         
-        <table class="form-table">
+        <table class="form-table" style="display: none !important;">
             <tr>
                 <th scope="row">
                     <?php echo esc_html__('Utilitários', 'joinotify-bling-erp'); ?>

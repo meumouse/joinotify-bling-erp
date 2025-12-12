@@ -32,9 +32,9 @@ class Ajax {
         add_action('wp_ajax_bling_clear_cache', array(__CLASS__, 'clear_cache'));
         
         // Webhook handlers
-        add_action('wp_ajax_bling_create_webhook', array(__CLASS__, 'create_webhook'));
-        add_action('wp_ajax_bling_delete_webhook', array(__CLASS__, 'delete_webhook'));
-        add_action('wp_ajax_bling_get_webhooks', array(__CLASS__, 'get_webhooks'));
+    //    add_action('wp_ajax_bling_create_webhook', array(__CLASS__, 'create_webhook'));
+    //    add_action('wp_ajax_bling_delete_webhook', array(__CLASS__, 'delete_webhook'));
+    //    add_action('wp_ajax_bling_get_webhooks', array(__CLASS__, 'get_webhooks'));
         
         // Order handlers
         add_action('wp_ajax_bling_create_invoice_for_order', array(__CLASS__, 'create_invoice_for_order'));

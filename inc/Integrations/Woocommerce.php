@@ -5,6 +5,9 @@ namespace MeuMouse\Joinotify\Bling\Integrations;
 use MeuMouse\Joinotify\Bling\API\Client;
 use MeuMouse\Joinotify\Bling\API\Controller;
 
+use WC_Order;
+use Automattic\WooCommerce\Internal\DataStores\Orders\CustomOrdersTableController;
+
 /**
  * WooCommerce integration for Bling.
  *
@@ -14,118 +17,104 @@ use MeuMouse\Joinotify\Bling\API\Controller;
 class Woocommerce {
     
     /**
+     * Instance of the class
+     *
+     * @var Woocommerce
+     */
+    private static $instance = null;
+    
+    /**
+     * Configuration options
+     *
+     * @var array
+     */
+    private $config = array();
+    
+    /**
      * Constructor
      *
      * @since 1.0.0
      * @return void
      */
     public function __construct() {
-        // Sync products on save
-        add_action('save_post_product', array(__CLASS__, 'sync_product_to_bling'), 10, 3);
+        if ( ! class_exists('WooCommerce') ) {
+            return;
+        }
+        
+        // Load configuration
+        $this->load_config();
         
         // Sync order on status change
-        add_action('woocommerce_order_status_changed', array(__CLASS__, 'handle_order_status_change'), 10, 4);
+        add_action( 'woocommerce_order_status_changed', array( $this, 'handle_order_status_change' ), 10, 4 );
         
         // Add custom order actions
-        add_filter('woocommerce_order_actions', array(__CLASS__, 'add_order_actions'));
-        add_action('woocommerce_order_action_bling_create_invoice', array(__CLASS__, 'create_invoice_manually'));
+        add_filter( 'woocommerce_order_actions', array( $this, 'add_order_actions' ) );
+        add_action( 'woocommerce_order_action_bling_create_invoice', array( $this, 'create_invoice_manually' ) );
         
         // Add meta boxes
-        add_action('add_meta_boxes', array(__CLASS__, 'add_meta_boxes'));
-        
-        // Sync customer to Bling
-        add_action('user_register', array(__CLASS__, 'sync_customer_to_bling'), 10, 1);
-        add_action('profile_update', array(__CLASS__, 'sync_customer_to_bling'), 10, 2);
+        add_action( 'add_meta_boxes', array( $this, 'add_meta_boxes' ) );
+    }
+
+    
+    /**
+     * Get singleton instance
+     *
+     * @return Woocommerce
+     */
+    public static function get_instance() {
+        if (null === self::$instance) {
+            self::$instance = new self();
+        }
+
+        return self::$instance;
     }
     
 
     /**
-     * Sync WooCommerce product to Bling.
+     * Load configuration from settings
      *
-     * @param int $post_id Product ID.
-     * @param \WP_Post $post Post object.
-     * @param bool $update Whether this is an update.
      * @return void
      */
-    public static function sync_product_to_bling($post_id, $post, $update) {
-        if (!get_option('bling_sync_products', 'no') === 'yes') {
-            return;
-        }
-        
-        if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) {
-            return;
-        }
-        
-        $product = wc_get_product($post_id);
-        
-        if (!$product) {
-            return;
-        }
-        
-        $bling_product_data = self::prepare_product_data($product);
-        
-        // Check if product already exists in Bling
-        $sku = $product->get_sku();
-        $existing = null;
-        
-        if ($sku) {
-            $response = Client::get_products(array('codigo' => $sku));
-            
-            if (!is_wp_error($response) && isset($response['data']['data'][0])) {
-                $existing = $response['data']['data'][0];
-            }
-        }
-        
-        if ($existing) {
-            // Update existing product
-            Client::update_product($existing['id'], $bling_product_data);
-            update_post_meta($post_id, '_bling_product_id', $existing['id']);
-        } else {
-            // Create new product
-            $response = Client::create_product($bling_product_data);
-            
-            if (!is_wp_error($response) && isset($response['data']['data'][0]['id'])) {
-                $bling_id = $response['data']['data'][0]['id'];
-                update_post_meta($post_id, '_bling_product_id', $bling_id);
-            }
-        }
+    private function load_config() {
+        $this->config = array(
+            'auto_create' => get_option('bling_auto_create_invoice', 'yes') === 'yes',
+            'trigger_statuses' => get_option('bling_invoice_trigger_statuses', array('completed')),
+            'nature_operation' => intval(get_option('bling_default_nature_operation', 1)),
+            'invoice_series' => get_option('bling_invoice_series', '1'),
+            'invoice_purpose' => get_option('bling_invoice_purpose', '1'),
+            'send_email' => get_option('bling_send_invoice_email', 'yes') === 'yes',
+            'sync_customers' => get_option('bling_sync_customers', 'no') === 'yes',
+            'sync_products' => get_option('bling_sync_products', 'no') === 'yes',
+        );
     }
     
 
     /**
-     * Prepare product data for Bling API.
+     * Check if invoice should be created for order
      *
-     * @param \WC_Product $product WooCommerce product.
-     * @return array Product data for Bling.
+     * @param WC_Order $order
+     * @param string $new_status
+     * @return bool
      */
-    private static function prepare_product_data($product) {
-        $data = array(
-            'nome' => $product->get_name(),
-            'codigo' => $product->get_sku() ?: 'WC_' . $product->get_id(),
-            'preco' => floatval($product->get_price()),
-            'precoCusto' => floatval($product->get_cost() ?: $product->get_price()),
-            'unidade' => 'UN',
-            'descricaoCurta' => $product->get_short_description(),
-            'descricaoComplementar' => $product->get_description(),
-            'pesoLiquido' => $product->get_weight() ? floatval($product->get_weight()) : 0.1,
-            'pesoBruto' => $product->get_weight() ? floatval($product->get_weight()) : 0.1,
-            'estoque' => $product->get_stock_quantity() ? intval($product->get_stock_quantity()) : 0,
-            'tipo' => 'P', // Produto
-            'situacao' => $product->get_status() === 'publish' ? 'A' : 'I',
-        );
-        
-        // Handle categories
-        $categories = wp_get_post_terms($product->get_id(), 'product_cat');
-        
-        if (!empty($categories) && !is_wp_error($categories)) {
-            $category_names = array();
-            foreach ($categories as $category) {
-                $category_names[] = $category->name;
-            }
-            $data['categoria'] = array('descricao' => implode(', ', $category_names));
+    private function should_create_invoice($order, $new_status) {
+        // Check if auto creation is enabled
+        if (!$this->config['auto_create']) {
+            return false;
         }
         
-        return $data;
+        // Check if status triggers invoice creation
+        if (!in_array($new_status, (array)$this->config['trigger_statuses'])) {
+            return false;
+        }
+        
+        // Check if invoice already exists
+        $existing_invoice_id = $order->get_meta('_bling_invoice_id');
+
+        if ($existing_invoice_id) {
+            return false;
+        }
+        
+        return true;
     }
     
 
@@ -135,20 +124,26 @@ class Woocommerce {
      * @param int $order_id Order ID.
      * @param string $old_status Old status.
      * @param string $new_status New status.
-     * @param \WC_Order $order Order object.
+     * @param WC_Order $order Order object.
      * @return void
      */
-    public static function handle_order_status_change($order_id, $old_status, $new_status, $order) {
-        $trigger_statuses = get_option('bling_invoice_trigger_statuses', array('completed', 'processing'));
+    public function handle_order_status_change($order_id, $old_status, $new_status, $order) {
+        // Load config to ensure it's fresh
+        $this->load_config();
         
-        if (in_array($new_status, $trigger_statuses)) {
-            // Check if invoice already exists
-            $existing_invoice_id = $order->get_meta('_bling_invoice_id');
-            
-            if (!$existing_invoice_id) {
-                // Create invoice in Bling
-                self::create_invoice_for_order($order);
-            }
+        if (!$this->should_create_invoice($order, $new_status)) {
+            return;
+        }
+        
+        // Create invoice in Bling
+        $result = $this->create_invoice_for_order($order);
+        
+        if (is_wp_error($result)) {
+            error_log(sprintf(
+                'Bling Invoice Error for Order #%d: %s',
+                $order_id,
+                $result->get_error_message()
+            ));
         }
     }
     
@@ -156,33 +151,47 @@ class Woocommerce {
     /**
      * Create invoice in Bling for WooCommerce order.
      *
-     * @param \WC_Order $order WooCommerce order.
+     * @param WC_Order $order WooCommerce order.
      * @return int|\WP_Error Invoice ID or error.
      */
-    public static function create_invoice_for_order($order) {
-        // First, ensure customer exists in Bling
-        $customer_id = self::sync_order_customer_to_bling($order);
-        
-        if (is_wp_error($customer_id)) {
-            return $customer_id;
-        }
-        
-        // Prepare invoice data
-        $invoice_data = self::prepare_invoice_data($order, $customer_id);
-        
-        // Create invoice in Bling
-        $response = Client::create_invoice($invoice_data);
-        
-        if (is_wp_error($response)) {
-            error_log('Bling Invoice Error: ' . $response->get_error_message());
-            return $response;
-        }
-        
-        if (isset($response['data']['data'][0]['id'])) {
+    public function create_invoice_for_order($order) {
+        try {
+            // First, ensure customer exists in Bling if sync is enabled
+            $customer_id = null;
+            if ($this->config['sync_customers']) {
+                $customer_id = $this->sync_order_customer_to_bling($order);
+                if (is_wp_error($customer_id)) {
+                    return $customer_id;
+                }
+            }
+            
+            // Prepare invoice data
+            $invoice_data = $this->prepare_invoice_data($order, $customer_id);
+            
+            // Add send email flag if configured
+            if ($this->config['send_email']) {
+                $invoice_data['enviarEmail'] = true;
+            }
+            
+            // Create invoice in Bling
+            $response = Client::create_invoice($invoice_data);
+            
+            if (is_wp_error($response)) {
+                return new \WP_Error('api_error', sprintf(
+                    'API Error: %s',
+                    $response->get_error_message()
+                ));
+            }
+            
+            if (!isset($response['data']['data'][0]['id'])) {
+                return new \WP_Error('invoice_creation_failed', 'Falha ao criar nota fiscal no Bling');
+            }
+            
             $invoice_id = $response['data']['data'][0]['id'];
             
             // Save invoice ID to order meta
             $order->update_meta_data('_bling_invoice_id', $invoice_id);
+            $order->update_meta_data('_bling_invoice_created', current_time('mysql'));
             $order->save();
             
             // Log the action
@@ -193,110 +202,171 @@ class Woocommerce {
                 )
             );
             
+            // Update order meta with invoice details if available
+            if (isset($response['data']['data'][0]['numero'])) {
+                $order->update_meta_data('_bling_invoice_number', $response['data']['data'][0]['numero']);
+                $order->save();
+            }
+            
             return $invoice_id;
+            
+        } catch (\Exception $e) {
+            return new \WP_Error('exception', sprintf(
+                'Exception: %s',
+                $e->getMessage()
+            ));
         }
-        
-        return new \WP_Error('invoice_creation_failed', 'Falha ao criar nota fiscal no Bling');
     }
-
     
+
     /**
      * Sync order customer to Bling.
      *
-     * @param \WC_Order $order WooCommerce order.
+     * @param WC_Order $order Order object
      * @return int|\WP_Error Customer ID in Bling.
      */
-    private static function sync_order_customer_to_bling($order) {
-        $customer_data = array(
-            'nome' => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
-            'tipo' => 'F', // Física
-            'numeroDocumento' => $order->get_meta('_billing_cpf') ?: $order->get_meta('_billing_cnpj'),
-            'email' => $order->get_billing_email(),
-            'telefone' => $order->get_billing_phone(),
-            'endereco' => array(
-                'endereco' => $order->get_billing_address_1(),
-                'numero' => $order->get_meta('_billing_number'),
-                'complemento' => $order->get_billing_address_2(),
-                'bairro' => $order->get_meta('_billing_neighborhood'),
-                'cep' => $order->get_billing_postcode(),
-                'cidade' => $order->get_billing_city(),
-                'uf' => $order->get_billing_state(),
-            ),
-        );
+    private function sync_order_customer_to_bling($order) {
+        // Try to get existing contact ID from user meta
+        $user_id = $order->get_user_id();
+        if ($user_id) {
+            $existing_contact_id = get_user_meta($user_id, '_bling_contact_id', true);
+            if ($existing_contact_id) {
+                return $existing_contact_id;
+            }
+        }
         
-        $response = Client::save_contact($customer_data);
+        // Prepare customer data
+        $customer_data = $this->prepare_customer_data($order);
+        
+        // Skip if no CPF/CNPJ
+        if (empty($customer_data['numeroDocumento'])) {
+            return new \WP_Error('missing_document', 'Cliente não possui CPF/CNPJ cadastrado');
+        }
+        
+        // Check if contact already exists by CPF/CNPJ
+        $existing = $this->find_contact_by_document($customer_data['numeroDocumento']);
+        if (!is_wp_error($existing) && $existing) {
+            // Update existing contact
+            $response = Client::request('PUT', '/contatos/' . $existing, $customer_data);
+        } else {
+            // Create new contact
+            $response = Client::save_contact($customer_data);
+        }
         
         if (is_wp_error($response)) {
             return $response;
         }
         
-        if (isset($response['data']['data'][0]['id'])) {
-            return $response['data']['data'][0]['id'];
+        if (!isset($response['data']['data'][0]['id'])) {
+            return new \WP_Error('customer_sync_failed', 'Falha ao sincronizar cliente com Bling');
         }
         
-        return new \WP_Error('customer_sync_failed', 'Falha ao sincronizar cliente com Bling');
+        $contact_id = $response['data']['data'][0]['id'];
+        
+        // Save contact ID to user meta for future use
+        if ($user_id) {
+            update_user_meta($user_id, '_bling_contact_id', $contact_id);
+        }
+        
+        return $contact_id;
+    }
+
+    
+    /**
+     * Find contact by CPF/CNPJ
+     *
+     * @param string $document
+     * @return int|false Contact ID or false if not found
+     */
+    private function find_contact_by_document($document) {
+        $response = Client::get_contacts(array(
+            'numeroDocumento' => $document,
+            'limite' => 1
+        ));
+        
+        if (is_wp_error($response) || empty($response['data']['data'][0])) {
+            return false;
+        }
+        
+        return $response['data']['data'][0]['id'];
+    }
+    
+
+    /**
+     * Prepare customer data for Bling
+     *
+     * @param WC_Order $order
+     * @return array
+     */
+    private function prepare_customer_data($order) {
+        $billing_cpf = $order->get_meta('_billing_cpf');
+        $billing_cnpj = $order->get_meta('_billing_cnpj');
+        
+        return array(
+            'nome' => $order->get_formatted_billing_full_name(),
+            'tipo' => $billing_cnpj ? 'J' : 'F', // J = Jurídica, F = Física
+            'numeroDocumento' => $billing_cnpj ?: $billing_cpf,
+            'email' => $order->get_billing_email(),
+            'telefone' => $this->format_phone($order->get_billing_phone()),
+            'endereco' => array(
+                'endereco' => $order->get_billing_address_1(),
+                'numero' => $order->get_meta('_billing_number') ?: 'S/N',
+                'complemento' => $order->get_billing_address_2(),
+                'bairro' => $order->get_meta('_billing_neighborhood') ?: '',
+                'cep' => preg_replace('/[^0-9]/', '', $order->get_billing_postcode()),
+                'cidade' => $order->get_billing_city(),
+                'uf' => $order->get_billing_state(),
+            ),
+        );
+    }
+    
+
+    /**
+     * Format phone number
+     *
+     * @param string $phone
+     * @return string
+     */
+    private function format_phone($phone) {
+        $phone = preg_replace('/[^0-9]/', '', $phone);
+        
+        if (strlen($phone) === 11) {
+            return sprintf('(%s) %s-%s',
+                substr($phone, 0, 2),
+                substr($phone, 2, 5),
+                substr($phone, 7)
+            );
+        } elseif (strlen($phone) === 10) {
+            return sprintf('(%s) %s-%s',
+                substr($phone, 0, 2),
+                substr($phone, 2, 4),
+                substr($phone, 6)
+            );
+        }
+
+        return $phone;
     }
     
 
     /**
      * Prepare invoice data for Bling API.
      *
-     * @param \WC_Order $order WooCommerce order.
-     * @param int $customer_id Customer ID in Bling.
+     * @param WC_Order $order WooCommerce order.
+     * @param int|null $customer_id Customer ID in Bling.
      * @return array Invoice data.
      */
-    private static function prepare_invoice_data($order, $customer_id) {
+    private function prepare_invoice_data($order, $customer_id = null) {
         // Get order items
         $items = array();
-        foreach ($order->get_items() as $item) {
-            $product = $item->get_product();
-            $bling_product_id = $product ? $product->get_meta('_bling_product_id') : null;
-            
-            $items[] = array(
-                'produto' => array(
-                    'id' => $bling_product_id ? intval($bling_product_id) : 0,
-                    'codigo' => $product ? $product->get_sku() : '',
-                    'nome' => $item->get_name(),
-                    'unidade' => 'UN',
-                ),
-                'quantidade' => floatval($item->get_quantity()),
-                'valor' => floatval($item->get_total()) / floatval($item->get_quantity()),
-                'desconto' => 0,
-            );
-        }
+        $order_items = $order->get_items();
         
-        // Prepare invoice data
-        $data = array(
-            'cliente' => array(
-                'id' => intval($customer_id),
-            ),
-            'transporte' => array(
-                'volumes' => array(
-                    array(
-                        'servico' => 'SEDEX',
-                        'codigoRastreamento' => $order->get_shipping_method(),
-                    ),
-                ),
-            ),
-            'itens' => $items,
-            'parcelas' => array(
-                array(
-                    'dias' => 0,
-                    'data' => date('Y-m-d'),
-                    'valor' => floatval($order->get_total()),
-                    'observacoes' => 'Pedido WooCommerce #' . $order->get_id(),
-                ),
-            ),
-            'numero' => 'WC-' . $order->get_id(),
-            'numeroLoja' => $order->get_id(),
-            'dataOperacao' => $order->get_date_created()->date('Y-m-d'),
-            'contato' => array(
-                'id' => intval($customer_id),
-            ),
-            'naturezaOperacao' => array(
-                'id' => intval(get_option('bling_default_nature_operation', 1)),
-            ),
-        );
+        foreach ($order_items as $item) {
+            $product = $item->get_product();
+            $item_data = $this->prepare_item_data($item, $product);
+            if ($item_data) {
+                $items[] = $item_data;
+            }
+        }
         
         // Add shipping as item if exists
         if ($order->get_shipping_total() > 0) {
@@ -313,7 +383,62 @@ class Woocommerce {
             );
         }
         
+        // Prepare invoice data
+        $data = array(
+            'serie' => $this->config['invoice_series'],
+            'numero' => 'WC-' . $order->get_id(),
+            'numeroLoja' => (string)$order->get_id(),
+            'dataOperacao' => $order->get_date_created()->date('Y-m-d'),
+            'naturezaOperacao' => array(
+                'id' => $this->config['nature_operation'],
+            ),
+            'finalidade' => $this->config['invoice_purpose'],
+            'itens' => $items,
+            'parcelas' => array(
+                array(
+                    'dias' => 0,
+                    'data' => date('Y-m-d'),
+                    'valor' => floatval($order->get_total()),
+                    'observacoes' => 'Pedido WooCommerce #' . $order->get_id(),
+                ),
+            ),
+        );
+        
+        // Add customer if available
+        if ($customer_id) {
+            $data['cliente'] = array('id' => intval($customer_id));
+            $data['contato'] = array('id' => intval($customer_id));
+        }
+        
         return $data;
+    }
+
+    
+    /**
+     * Prepare item data for invoice
+     *
+     * @param \WC_Order_Item_Product $item
+     * @param \WC_Product|null $product
+     * @return array|null
+     */
+    private function prepare_item_data($item, $product) {
+        if (!$product) {
+            return null;
+        }
+        
+        $price = floatval($item->get_total()) / floatval($item->get_quantity());
+        
+        return array(
+            'produto' => array(
+                'id' => intval($product->get_meta('_bling_product_id') ?: 0),
+                'codigo' => $product->get_sku() ?: 'PROD-' . $product->get_id(),
+                'nome' => $item->get_name(),
+                'unidade' => 'UN',
+            ),
+            'quantidade' => floatval($item->get_quantity()),
+            'valor' => $price,
+            'desconto' => 0,
+        );
     }
     
 
@@ -323,8 +448,10 @@ class Woocommerce {
      * @param array $actions Order actions.
      * @return array Modified actions.
      */
-    public static function add_order_actions($actions) {
+    public function add_order_actions($actions) {
         $actions['bling_create_invoice'] = __('Criar nota fiscal no Bling', 'joinotify-bling-erp');
+        $actions['bling_check_invoice_status'] = __('Verificar status da nota fiscal', 'joinotify-bling-erp');
+        
         return $actions;
     }
     
@@ -332,11 +459,11 @@ class Woocommerce {
     /**
      * Manually create invoice from order action.
      *
-     * @param \WC_Order $order WooCommerce order.
+     * @param WC_Order $order WooCommerce order.
      * @return void
      */
-    public static function create_invoice_manually($order) {
-        $result = self::create_invoice_for_order($order);
+    public function create_invoice_manually($order) {
+        $result = $this->create_invoice_for_order($order);
         
         if (is_wp_error($result)) {
             wc_admin_notice(
@@ -348,7 +475,10 @@ class Woocommerce {
             );
         } else {
             wc_admin_notice(
-                __('Nota fiscal criada com sucesso no Bling!', 'joinotify-bling-erp'),
+                sprintf(
+                    __('Nota fiscal criada com sucesso no Bling! ID: %d', 'joinotify-bling-erp'),
+                    $result
+                ),
                 'success'
             );
         }
@@ -356,18 +486,82 @@ class Woocommerce {
 
     
     /**
-     * Add meta boxes to order edit screen.
+     * Check invoice status manually
      *
+     * @param WC_Order $order
      * @return void
      */
-    public static function add_meta_boxes() {
+    public function check_invoice_status_manually($order) {
+        $invoice_id = $order->get_meta('_bling_invoice_id');
+        
+        if (!$invoice_id) {
+            wc_admin_notice(
+                __('Nenhuma nota fiscal vinculada a este pedido.', 'joinotify-bling-erp'),
+                'warning'
+            );
+
+            return;
+        }
+        
+        $response = Client::get_invoice($invoice_id);
+        
+        if (is_wp_error($response)) {
+            wc_admin_notice(
+                sprintf(
+                    __('Erro ao verificar status: %s', 'joinotify-bling-erp'),
+                    $response->get_error_message()
+                ),
+                'error'
+            );
+
+            return;
+        }
+        
+        if (isset($response['data']['data'][0])) {
+            $invoice_data = $response['data']['data'][0];
+            $status = $this->get_invoice_status_label($invoice_data['situacao'] ?? 0);
+            
+            wc_admin_notice(
+                sprintf(
+                    __('Status da nota fiscal: %s', 'joinotify-bling-erp'),
+                    $status
+                ),
+                'info'
+            );
+        }
+    }
+
+
+    /**
+     * Get orders page ID
+     * 
+     * @since 1.0.0
+     * @return string
+     */
+    public static function get_orders_page() {
+        // compatibility with HPOS
+        if ( class_exists('\Automattic\WooCommerce\Internal\DataStores\Orders\CustomOrdersTableController') && wc_get_container()->get( CustomOrdersTableController::class )->custom_orders_table_usage_is_enabled() ) {
+            return wc_get_page_screen_id('shop-order');
+        }
+
+        return 'shop_order';
+    }
+    
+
+    /**
+     * Add meta boxes to order edit screen.
+     *
+     * @since 1.0.0
+     * @return void
+     */
+    public function add_meta_boxes() {
         add_meta_box(
-            'bling_order_info',
-            __('Informações do Bling', 'joinotify-bling-erp'),
-            array(__CLASS__, 'render_order_meta_box'),
-            'shop_order',
-            'side',
-            'high'
+            'bling_order_info', // metabox ID
+            __('Informações do Bling', 'joinotify-bling-erp'), // title
+            array( $this, 'render_order_meta_box' ), // callback function
+            self::get_orders_page(), // add meta box to orders page
+            'side', // position (normal, side, advanced)
+            'high', // priority (default, low, high, core)
         );
     }
 
@@ -375,56 +569,45 @@ class Woocommerce {
     /**
      * Render order meta box.
      *
-     * @param \WP_Post $post Post object.
+     * @since 1.0.0
+     * @param \WP_Post $post | Post object.
      * @return void
      */
-    public static function render_order_meta_box($post) {
-        $order = wc_get_order($post->ID);
+    public function render_order_meta_box( $post ) {
+        $order = wc_get_order( $post->ID );
         $invoice_id = $order->get_meta('_bling_invoice_id');
         
         echo '<div class="bling-order-info">';
-        
-        if ($invoice_id) {
-            echo '<p><strong>' . __('Nota Fiscal:', 'joinotify-bling-erp') . '</strong></p>';
-            echo '<p>' . __('ID:', 'joinotify-bling-erp') . ' ' . esc_html($invoice_id) . '</p>';
-            
-            // Try to get invoice details
-            $invoice = Client::get_invoice($invoice_id);
-            
-            if (!is_wp_error($invoice) && isset($invoice['data']['data'][0])) {
-                $invoice_data = $invoice['data']['data'][0];
-                $situacao = isset($invoice_data['situacao']) ? $invoice_data['situacao'] : '';
-                $numero = isset($invoice_data['numero']) ? $invoice_data['numero'] : '';
-                $chave = isset($invoice_data['chave']) ? $invoice_data['chave'] : '';
+            if ( $invoice_id ) {
+                echo '<p><strong>' . __('Nota Fiscal:', 'joinotify-bling-erp') . '</strong></p>';
+                echo '<p>' . __('ID:', 'joinotify-bling-erp') . ' ' . esc_html( $invoice_id ) . '</p>';
                 
-                echo '<p>' . __('Número:', 'joinotify-bling-erp') . ' ' . esc_html($numero) . '</p>';
-                echo '<p>' . __('Situação:', 'joinotify-bling-erp') . ' ' . self::get_invoice_status_label($situacao) . '</p>';
-                
-                if ($chave) {
-                    echo '<p><strong>' . __('Chave de Acesso:', 'joinotify-bling-erp') . '</strong></p>';
-                    echo '<p style="word-break: break-all;">' . esc_html($chave) . '</p>';
+                // Try to get invoice details from meta first
+                $invoice_number = $order->get_meta('_bling_invoice_number');
+
+                if ( $invoice_number ) {
+                    echo '<p>' . __('Número:', 'joinotify-bling-erp') . ' ' . esc_html( $invoice_number ) . '</p>';
                 }
                 
                 // Add button to view in Bling
-                echo '<p><a href="https://www.bling.com.br/nfe/' . esc_attr($invoice_id) . '" target="_blank" class="button">';
+                echo '<p><a href="https://www.bling.com.br/nfe/' . esc_attr( $invoice_id ) . '" target="_blank" class="button button-small">';
                 echo __('Ver no Bling', 'joinotify-bling-erp');
                 echo '</a></p>';
+            } else {
+                echo '<p>' . __('Nenhuma nota fiscal criada no Bling para este pedido.', 'joinotify-bling-erp') . '</p>';
             }
-        } else {
-            echo '<p>' . __('Nenhuma nota fiscal criada no Bling para este pedido.', 'joinotify-bling-erp') . '</p>';
-        }
-        
         echo '</div>';
     }
-    
 
+    
     /**
      * Get invoice status label.
      *
-     * @param int $status Status code.
+     * @since 1.0.0
+     * @param int $status | Status code.
      * @return string Status label.
      */
-    private static function get_invoice_status_label($status) {
+    private function get_invoice_status_label( $status ) {
         $statuses = array(
             1 => __('Em digitação', 'joinotify-bling-erp'),
             2 => __('Cancelada', 'joinotify-bling-erp'),
@@ -437,46 +620,6 @@ class Woocommerce {
             9 => __('Denegada', 'joinotify-bling-erp'),
         );
         
-        return isset($statuses[$status]) ? $statuses[$status] : __('Desconhecido', 'joinotify-bling-erp');
-    }
-    
-    
-    /**
-     * Sync WooCommerce customer to Bling.
-     *
-     * @param int $user_id User ID.
-     * @param mixed $old_user_data Old user data (for updates).
-     * @return void
-     */
-    public static function sync_customer_to_bling($user_id, $old_user_data = null) {
-        if (!get_option('bling_sync_customers', 'no') === 'yes') {
-            return;
-        }
-        
-        $user = get_userdata($user_id);
-        
-        if (!$user) {
-            return;
-        }
-        
-        $customer_data = array(
-            'nome' => $user->display_name,
-            'tipo' => 'F', // Física
-            'email' => $user->user_email,
-        );
-        
-        // Get billing info from user meta
-        $billing_cpf = get_user_meta($user_id, 'billing_cpf', true);
-        $billing_phone = get_user_meta($user_id, 'billing_phone', true);
-        
-        if ($billing_cpf) {
-            $customer_data['numeroDocumento'] = $billing_cpf;
-        }
-        
-        if ($billing_phone) {
-            $customer_data['telefone'] = $billing_phone;
-        }
-        
-        Client::save_contact($customer_data);
+        return isset( $statuses[$status] ) ? $statuses[$status] : __('Desconhecido', 'joinotify-bling-erp');
     }
 }
