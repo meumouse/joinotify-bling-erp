@@ -221,6 +221,14 @@ class Woocommerce {
                     $invoice_id
                 )
             );
+
+            $send = Client::send_invoice_to_sefaz( $invoice_id );
+
+            if ( is_wp_error( $send ) ) {
+                $order->add_order_note(
+                    'Nota criada no Bling, mas houve erro ao enviar para SEFAZ: ' . $send->get_error_message()
+                );
+            }
             
             // Update order meta with invoice details if available
             if ( isset( $response['data']['data'][0]['numero'] ) ) {
