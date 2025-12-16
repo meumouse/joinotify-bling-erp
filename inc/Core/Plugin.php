@@ -21,7 +21,7 @@ class Plugin {
      * @since 1.0.0
      * @return string
      */
-    public const VERSION = '1.0.0';
+    public const VERSION = '1.0.1';
 
     /**
      * Plugin slug.
