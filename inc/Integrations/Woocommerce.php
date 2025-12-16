@@ -181,7 +181,22 @@ class Woocommerce {
             if ( $this->config['send_email'] ) {
                 $invoice_data['enviarEmail'] = true;
             }
-            
+
+            if ( $this->config['sync_customers'] && $customer_id ) {
+                $customer_data = $this->prepare_customer_data( $order );
+
+                $validation = $this->validate_contact_data_for_invoice( $customer_data );
+
+                if ( is_wp_error( $validation ) ) {
+                    return $validation;
+                }
+
+                Client::save_contact( array_merge(
+                    array( 'id' => $customer_id ),
+                    $customer_data
+                ));
+            }
+                        
             // Create invoice in Bling
             $response = Client::create_invoice( $invoice_data );
 
@@ -207,7 +222,6 @@ class Woocommerce {
             }
 
             $invoice_id = (int) $response['data']['data']['id'];
-
             
             // Save invoice ID to order meta
             $order->update_meta_data( '_bling_invoice_id', $invoice_id );
@@ -223,10 +237,25 @@ class Woocommerce {
             );
 
             $send = Client::send_invoice_to_sefaz( $invoice_id );
-
+            
             if ( is_wp_error( $send ) ) {
+                error_log(
+                    '[JOINOTIFY - BLING ERP]: Erro ao enviar NF ' . $invoice_id . ' para SEFAZ: ' . $send->get_error_message()
+                );
+
                 $order->add_order_note(
-                    'Nota criada no Bling, mas houve erro ao enviar para SEFAZ: ' . $send->get_error_message()
+                    'Erro ao enviar NF para SEFAZ: ' . $send->get_error_message()
+                );
+
+            } else {
+                if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+                    error_log(
+                        '[JOINOTIFY - BLING ERP]: NF ' . $invoice_id . ' enviada para SEFAZ com sucesso.'
+                    );
+                }
+
+                $order->add_order_note(
+                    'Nota fiscal enviada para SEFAZ com sucesso.'
                 );
             }
             
@@ -360,12 +389,19 @@ class Woocommerce {
      * Prepare customer data for Bling
      *
      * @since 1.0.0
+     * @version 1.0.1
      * @param WC_Order $order
      * @return array
      */
     private function prepare_customer_data( $order ) {
         $billing_cpf = $order->get_meta('_billing_cpf');
         $billing_cnpj = $order->get_meta('_billing_cnpj');
+        $cep = preg_replace('/[^0-9]/', '', $order->get_billing_postcode());
+        $bairro = $order->get_meta('_billing_neighborhood');
+
+        if ( empty( $bairro ) ) {
+            $bairro = $this->get_bairro_by_cep( $cep );
+        }
         
         return apply_filters( 'Joinotify/Bling/Prepare_Customer_Data', array(
             'nome' => $order->get_formatted_billing_full_name(),
@@ -379,8 +415,8 @@ class Woocommerce {
                     'endereco' => $order->get_billing_address_1(),
                     'numero' => $order->get_meta('_billing_number') ?: 'S/N',
                     'complemento' => $order->get_billing_address_2(),
-                    'bairro' => $order->get_meta('_billing_neighborhood') ?: '',
-                    'cep' => preg_replace('/[^0-9]/', '', $order->get_billing_postcode()),
+                    'bairro' => $bairro,
+                    'cep' => $cep,
                     'municipio' => $order->get_billing_city(),
                     'uf' => $order->get_billing_state(),
                 )
@@ -523,6 +559,47 @@ class Woocommerce {
             'tipo'       => 'P',
             'origem'     => 0,
         );
+    }
+
+
+    /**
+     * Validate required contact data before issuing NF-e
+     *
+     * @since 1.0.1
+     * @param array $customer_data
+     * @return true|WP_Error
+     */
+    private function validate_contact_data_for_invoice( $customer_data ) {
+        $required_fields = array(
+            'nome',
+            'numeroDocumento',
+            'endereco.geral.endereco',
+            'endereco.geral.numero',
+            'endereco.geral.bairro',
+            'endereco.geral.cep',
+            'endereco.geral.municipio',
+            'endereco.geral.uf',
+        );
+
+        foreach ( $required_fields as $field ) {
+            $value = $customer_data;
+
+            foreach ( explode('.', $field) as $key ) {
+                if ( ! isset( $value[ $key ] ) || empty( $value[ $key ] ) ) {
+                    return new WP_Error(
+                        'missing_contact_data',
+                        sprintf(
+                            'Dados obrigatórios do cliente ausentes para emissão de NF-e: %s',
+                            $field
+                        )
+                    );
+                }
+
+                $value = $value[ $key ];
+            }
+        }
+
+        return true;
     }
     
 
@@ -746,5 +823,43 @@ class Woocommerce {
         );
         
         return isset( $statuses[$status] ) ? $statuses[$status] : __('Desconhecido', 'joinotify-bling-erp');
+    }
+
+
+    /**
+     * Get neighborhood (bairro) by CEP using ViaCEP
+     *
+     * @since 1.0.1
+     * @param string $cep
+     * @return string
+     */
+    private function get_bairro_by_cep( $cep ) {
+        $cep = preg_replace('/[^0-9]/', '', $cep);
+
+        if ( empty( $cep ) || strlen( $cep ) !== 8 ) {
+            return 'Centro';
+        }
+
+        $url = 'https://viacep.com.br/ws/' . $cep . '/json/';
+
+        $response = wp_remote_get( $url, array(
+            'timeout' => 10,
+        ));
+
+        if ( is_wp_error( $response ) ) {
+            return 'Centro';
+        }
+
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( empty( $body ) || isset( $body['erro'] ) ) {
+            return 'Centro';
+        }
+
+        if ( ! empty( $body['bairro'] ) ) {
+            return $body['bairro'];
+        }
+
+        return 'Centro';
     }
 }
