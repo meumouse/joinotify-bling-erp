@@ -30,4 +30,8 @@ if ( file_exists( $autoload ) ) {
     require_once $autoload;
 }
 
+if ( ! class_exists( Plugin::class ) ) {
+    return;
+}
+
 Plugin::get_instance()->init();
