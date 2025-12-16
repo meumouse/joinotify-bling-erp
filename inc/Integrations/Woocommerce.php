@@ -159,7 +159,7 @@ class Woocommerce {
      *
      * @since 1.0.0
      * @param WC_Order $order WooCommerce order.
-     * @return int|\WP_Error Invoice ID or error.
+     * @return int|WP_Error Invoice ID or error.
      */
     public function create_invoice_for_order( $order ) {
         try {
@@ -196,11 +196,18 @@ class Woocommerce {
                 ));
             }
             
-            if ( ! isset( $response['data'][0]['id'] ) ) {
-                return new WP_Error( 'invoice_creation_failed', sprintf( __( 'Falha ao criar nota fiscal no Bling: %s', 'joinotify-bling-erp' ), print_r( $response['data']['error'], true ) ) );
+            if ( ! isset( $response['data']['data']['id'] ) ) {
+                return new WP_Error(
+                    'invoice_creation_failed',
+                    sprintf(
+                        __( 'Falha ao criar nota fiscal no Bling: %s', 'joinotify-bling-erp' ),
+                        print_r( $response['data'], true )
+                    )
+                );
             }
-            
-            $invoice_id = $response['data'][0]['id'];
+
+            $invoice_id = (int) $response['data']['data']['id'];
+
             
             // Save invoice ID to order meta
             $order->update_meta_data( '_bling_invoice_id', $invoice_id );
@@ -237,7 +244,7 @@ class Woocommerce {
      *
      * @since 1.0.0
      * @param WC_Order $order Order object
-     * @return int|\WP_Error Customer ID in Bling.
+     * @return int|WP_Error Customer ID in Bling.
      */
     private function sync_order_customer_to_bling( $order ) {
         // Try to get existing contact ID from user meta
@@ -406,44 +413,37 @@ class Woocommerce {
      * Prepare invoice data for Bling API.
      *
      * @since 1.0.0
+     * @version 1.0.1
      * @param WC_Order $order WooCommerce order.
      * @param int|null $customer_id Customer ID in Bling.
      * @return array Invoice data.
      */
     private function prepare_invoice_data( $order, $customer_id = null ) {
-        // Get order items
         $items = array();
-        $order_items = $order->get_items();
-        
-        foreach ( $order_items as $item ) {
+
+        foreach ( $order->get_items() as $item ) {
             $product = $item->get_product();
             $item_data = $this->prepare_item_data( $item, $product );
+
+            if ( is_wp_error( $item_data ) ) {
+                return $item_data;
+            }
 
             if ( $item_data ) {
                 $items[] = $item_data;
             }
         }
-        
-        // Add shipping as item if exists
-        if ( $order->get_shipping_total() > 0 ) {
-            $items[] = array(
-                'produto' => array(
-                    'id' => 0,
-                    'codigo' => 'FRETE',
-                    'nome' => 'Frete',
-                    'unidade' => 'UN',
-                ),
-                'quantidade' => 1,
-                'valor' => floatval($order->get_shipping_total()),
-                'desconto' => 0,
+
+        if ( empty( $items ) ) {
+            return new WP_Error(
+                'no_items',
+                'A nota fiscal não possui itens válidos.'
             );
         }
-        
-        // Prepare invoice data
+
         $data = array(
             'serie' => $this->config['invoice_series'],
-            'numero' => 'WC-' . $order->get_id(),
-            'numeroLoja' => (string)$order->get_id(),
+            'numeroLoja' => (string) $order->get_id(),
             'dataOperacao' => $order->get_date_created()->date('Y-m-d'),
             'naturezaOperacao' => array(
                 'id' => $this->config['nature_operation'],
@@ -452,20 +452,28 @@ class Woocommerce {
             'itens' => $items,
             'parcelas' => array(
                 array(
-                    'dias' => 0,
                     'data' => date('Y-m-d'),
-                    'valor' => floatval($order->get_total()),
-                    'observacoes' => 'Pedido WooCommerce #' . $order->get_id(),
+                    'valor' => (float) $order->get_total(),
+                    'observacoes' => 'Pedido #' . $order->get_id(),
                 ),
             ),
         );
-        
-        // Add customer if available
+
         if ( $customer_id ) {
-            $data['cliente'] = array( 'id' => intval( $customer_id ) );
-            $data['contato'] = array( 'id' => intval( $customer_id ) );
+            $data['contato'] = array(
+                'id' => (int) $customer_id,
+            );
         }
-        
+
+        $shipping_total = (float) $order->get_shipping_total();
+
+        if ( $shipping_total > 0 ) {
+            $data['transporte'] = array(
+                'fretePorConta' => 0, // 0 = emitente, 1 = destinatário
+                'frete' => $shipping_total,
+            );
+        }
+
         return $data;
     }
 
@@ -489,7 +497,7 @@ class Woocommerce {
         $codigo = $product->get_sku();
 
         if ( empty( $codigo ) ) {
-            return new \WP_Error(
+            return new WP_Error(
                 'missing_sku',
                 sprintf(
                     'O produto "%s" não possui SKU. NF-e no Bling exige código.',
