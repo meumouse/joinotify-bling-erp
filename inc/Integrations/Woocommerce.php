@@ -13,6 +13,7 @@ use Automattic\WooCommerce\Internal\DataStores\Orders\CustomOrdersTableControlle
  * WooCommerce integration for Bling.
  *
  * @since 1.0.0
+ * @version 1.0.1
  * @package MeuMouse.com
  */
 class Woocommerce {
@@ -473,6 +474,7 @@ class Woocommerce {
      * Prepare item data for invoice
      *
      * @since 1.0.0
+     * @version 1.0.1
      * @param \WC_Order_Item_Product $item
      * @param \WC_Product|null $product
      * @return array|null
@@ -481,19 +483,29 @@ class Woocommerce {
         if ( ! $product ) {
             return null;
         }
-        
-        $price = floatval($item->get_total()) / floatval($item->get_quantity());
-        
+
+        $quantity = max( 1, (float) $item->get_quantity() );
+        $price = (float) $item->get_total() / $quantity;
+        $codigo = $product->get_sku();
+
+        if ( empty( $codigo ) ) {
+            return new \WP_Error(
+                'missing_sku',
+                sprintf(
+                    'O produto "%s" não possui SKU. NF-e no Bling exige código.',
+                    $item->get_name()
+                )
+            );
+        }
+
         return array(
-            'produto' => array(
-                'id' => intval($product->get_meta('_bling_product_id') ?: 0),
-                'codigo' => $product->get_sku() ?: 'PROD-' . $product->get_id(),
-                'nome' => $item->get_name(),
-                'unidade' => 'UN',
-            ),
-            'quantidade' => floatval($item->get_quantity()),
-            'valor' => $price,
-            'desconto' => 0,
+            'codigo'     => $codigo,
+            'descricao'  => $item->get_name(),
+            'unidade'    => 'UN',
+            'quantidade' => $quantity,
+            'valor'      => $price,
+            'tipo'       => 'P',
+            'origem'     => 0,
         );
     }
     
