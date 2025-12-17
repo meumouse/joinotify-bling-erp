@@ -188,6 +188,16 @@ class Assets {
                 'channels_load_error' => __('Erro ao carregar canais de venda.', 'joinotify-bling-erp'),
                 'try_again' => __('Tentar novamente', 'joinotify-bling-erp'),
                 'unknown_error' => __('Erro desconhecido', 'joinotify-bling-erp'),
+
+                // Meta Boxes
+                'create_invoice' => __('Criar Nota Fiscal', 'joinotify-bling-erp'),
+                'update_status' => __('Atualizar Status', 'joinotify-bling-erp'),
+                'confirm_create_invoice' => __('Tem certeza que deseja criar a nota fiscal para este pedido?', 'joinotify-bling-erp'),
+                'invoice_created' => __('Nota fiscal criada com sucesso!', 'joinotify-bling-erp'),
+                'request_error' => __('Erro ao processar a requisição.', 'joinotify-bling-erp'),
+                'status' => __('Status', 'joinotify-bling-erp'),
+                'warning' => __('Aviso', 'joinotify-bling-erp'),
+                'info' => __('Informação', 'joinotify-bling-erp'),
             ),
             'urls' => array(
                 'admin_url' => admin_url(),

@@ -640,6 +640,7 @@ class Woocommerce {
 
         $data = array(
             'serie' => $this->config['invoice_series'],
+            'tipo' => 1,
             'numeroLoja' => (string) $order->get_id(),
             'dataOperacao' => $order->get_date_created()->date('Y-m-d'),
             'naturezaOperacao' => array(
@@ -647,6 +648,7 @@ class Woocommerce {
             ),
             'finalidade' => $this->config['invoice_purpose'],
             'itens' => $items,
+            'observacoes' => $observation,
             'parcelas' => array(
                 array(
                     'data' => date('Y-m-d'),
@@ -809,7 +811,7 @@ class Woocommerce {
             }
             
             // If not in cache, fetch from API
-            $response = Client::get_sales_channel( $channel_id );
+            $response = Client::get_sales_channels( $channel_id );
             
             if ( is_wp_error( $response ) || $response['status'] !== 200 ) {
                 // Try to get from the list of all channels
@@ -1040,7 +1042,7 @@ class Woocommerce {
         
         if ( isset( $response['data']['data'][0] ) ) {
             $invoice_data = $response['data']['data'][0];
-            $status = $this->get_invoice_status_label($invoice_data['situacao'] ?? 0);
+            $status = self::get_invoice_status_label($invoice_data['situacao'] ?? 0);
             
             $order->add_order_note(
                 sprintf(
@@ -1163,97 +1165,6 @@ class Woocommerce {
                 }
             }
         echo '</div>';
-        
-        // Add some JavaScript for AJAX actions
-        $this->add_meta_box_scripts();
-    }
-
-
-    /**
-     * Add JavaScript for meta box actions
-     *
-     * @since 1.0.1
-     * @return void
-     */
-    private function add_meta_box_scripts() {
-        static $added = false;
-        
-        if ( $added ) {
-            return;
-        }
-        
-        $added = true;
-        
-        ?>
-        <script type="text/javascript">
-        jQuery(document).ready( function($) {
-            // Handle create invoice button click
-            $(document).on('click', '.create-bling-invoice', function(e) {
-                e.preventDefault();
-                
-                var $button = $(this);
-                var orderId = $button.data('order-id');
-                
-                $button.prop('disabled', true).text('Criando...');
-                
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: {
-                        action: 'bling_create_invoice_ajax',
-                        order_id: orderId,
-                        nonce: '<?php echo wp_create_nonce('bling_create_invoice'); ?>'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            alert('Nota fiscal criada com sucesso! ID: ' + response.data.invoice_id);
-                            location.reload();
-                        } else {
-                            alert('Erro: ' + response.data);
-                            $button.prop('disabled', false).text('Criar Nota Fiscal');
-                        }
-                    },
-                    error: function() {
-                        alert('Erro ao processar a requisição.');
-                        $button.prop('disabled', false).text('Criar Nota Fiscal');
-                    }
-                });
-            });
-            
-            // Handle check status button click
-            $(document).on('click', '.check-bling-status', function(e) {
-                e.preventDefault();
-                
-                var $button = $(this);
-                var orderId = $button.data('order-id');
-                
-                $button.prop('disabled', true).text('Verificando...');
-                
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: {
-                        action: 'bling_check_invoice_status_ajax',
-                        order_id: orderId,
-                        nonce: '<?php echo wp_create_nonce('bling_check_invoice_status'); ?>'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            alert('Status: ' + response.data.status);
-                        } else {
-                            alert('Erro: ' + response.data);
-                        }
-                        $button.prop('disabled', false).text('Atualizar Status');
-                    },
-                    error: function() {
-                        alert('Erro ao processar a requisição.');
-                        $button.prop('disabled', false).text('Atualizar Status');
-                    }
-                });
-            });
-        });
-        </script>
-        <?php
     }
 
 
@@ -1297,10 +1208,11 @@ class Woocommerce {
      * Get invoice status label.
      *
      * @since 1.0.0
+     * @version 1.0.1
      * @param int $status | Status code.
      * @return string Status label.
      */
-    private function get_invoice_status_label( $status ) {
+    public static function get_invoice_status_label( $status ) {
         $statuses = array(
             1 => __('Em digitação', 'joinotify-bling-erp'),
             2 => __('Cancelada', 'joinotify-bling-erp'),

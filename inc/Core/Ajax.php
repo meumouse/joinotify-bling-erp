@@ -3,7 +3,7 @@
 namespace MeuMouse\Joinotify\Bling\Core;
 
 use MeuMouse\Joinotify\Bling\API\Client;
-use MeuMouse\Joinotify\Bling\Integrations\WooCommerce;
+use MeuMouse\Joinotify\Bling\Integrations\Woocommerce;
 
 // Exit if accessed directly.
 defined('ABSPATH') || exit;
@@ -33,7 +33,7 @@ class Ajax {
         add_action( 'wp_ajax_bling_test_connection', array( __CLASS__, 'test_connection' ) );
         
         // Order handlers
-        add_action( 'wp_ajax_bling_create_invoice_for_order', array( __CLASS__, 'create_invoice_for_order' ) );
+        add_action( 'wp_ajax_bling_create_invoice_for_order', array( __CLASS__, 'create_invoice_for_order_callback' ) );
         add_action( 'wp_ajax_bling_get_invoice_status', array( __CLASS__, 'get_invoice_status' ) );
         
         // Product handlers
@@ -201,7 +201,7 @@ class Ajax {
      * @since 1.0.0
      * @return void
      */
-    public static function create_invoice_for_order() {
+    public static function create_invoice_for_order_callback() {
         check_ajax_referer('bling_admin_nonce', 'nonce');
         
         if (!current_user_can('manage_woocommerce')) {
@@ -232,8 +232,8 @@ class Ajax {
             }
             
             // Create invoice
-            $woocommerce_integration = new WooCommerce();
-            $result = $woocommerce_integration::create_invoice_for_order($order);
+            $woocommerce = new Woocommerce();
+            $result = $woocommerce->create_invoice_for_order( $order );
             
             if (is_wp_error($result)) {
                 wp_send_json_error($result->get_error_message());
@@ -314,7 +314,7 @@ class Ajax {
                             <td>
                                 <?php 
                                 $status = $invoice_data['situacao'] ?? 0;
-                                echo \MeuMouse\Joinotify\Bling\Integrations\WooCommerce::get_invoice_status_label($status);
+                                echo WooCommerce::get_invoice_status_label($status);
                                 ?>
                             </td>
                         </tr>
@@ -543,7 +543,7 @@ class Ajax {
      * @return void
      */
     public function ajax_create_invoice() {
-        check_ajax_referer('bling_create_invoice', 'nonce');
+        check_ajax_referer('bling_admin_nonce', 'nonce');
         
         if ( ! current_user_can('manage_woocommerce') ) {
             wp_die('Unauthorized');
@@ -556,7 +556,8 @@ class Ajax {
             wp_send_json_error('Pedido não encontrado.');
         }
         
-        $result = $this->create_invoice_for_order($order);
+        $woocommerce = new Woocommerce();
+        $result = $woocommerce->create_invoice_for_order( $order );
         
         if ( is_wp_error($result) ) {
             wp_send_json_error($result->get_error_message());
@@ -575,7 +576,7 @@ class Ajax {
      * @return void
      */
     public function ajax_check_invoice_status() {
-        check_ajax_referer('bling_check_invoice_status', 'nonce');
+        check_ajax_referer('bling_admin_nonce', 'nonce');
         
         if ( ! current_user_can('manage_woocommerce') ) {
             wp_die('Unauthorized');
@@ -600,12 +601,25 @@ class Ajax {
             wp_send_json_error('Erro ao verificar status: ' . $response->get_error_message());
         }
         
-        if ( isset($response['data']['data'][0]) ) {
+        if ( isset($response['data']['data']['situacao']) ) {
+            $invoice_data = $response['data']['data'];
+            $status = WooCommerce::get_invoice_status_label($invoice_data['situacao']);
+            
+            wp_send_json_success(array('status' => $status));
+        } elseif ( isset($response['data']['situacao']) ) {
+            $invoice_data = $response['data'];
+            $status = WooCommerce::get_invoice_status_label($invoice_data['situacao']);
+
+            wp_send_json_success(array('status' => $status));
+        } elseif ( isset($response['data']['data'][0]['situacao']) ) {
             $invoice_data = $response['data']['data'][0];
-            $status = $this->get_invoice_status_label($invoice_data['situacao'] ?? 0);
+            $status = WooCommerce::get_invoice_status_label($invoice_data['situacao']);
+
             wp_send_json_success(array('status' => $status));
         } else {
-            wp_send_json_error('Não foi possível obter o status da nota fiscal.');
+            error_log('Estrutura inesperada da resposta: ' . print_r($response, true));
+
+            wp_send_json_error('Não foi possível obter o status da nota fiscal. Estrutura da resposta inesperada.');
         }
     }
 

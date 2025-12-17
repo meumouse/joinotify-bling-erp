@@ -208,8 +208,8 @@ class Client {
      * @param int $invoice_id | Invoice ID.
      * @return array|WP_Error Invoice data or error.
      */
-    public static function get_invoice($invoice_id) {
-        return self::request('GET', '/nfe/' . $invoice_id);
+    public static function get_invoice( $invoice_id ) {
+        return self::request( 'GET', '/nfe/' . $invoice_id );
     }
     
 

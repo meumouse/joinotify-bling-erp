@@ -36,6 +36,7 @@
             Bling.Products.init();
             Bling.Orders.init();
             Bling.SalesChannels.init();
+            Bling.MetaBoxes.init();
         },
 
         /**
@@ -195,6 +196,30 @@
         showInlineError: function($container, message) {
             var $message = $('<div class="notice notice-error inline"><p>' + message + '</p></div>');
             $container.html($message);
+        },
+
+        /**
+         * Show alert dialog
+         */
+        alert: function(message, type) {
+            type = type || 'info';
+            var title = '';
+            
+            switch(type) {
+                case 'success':
+                    title = bling_admin.strings.success;
+                    break;
+                case 'error':
+                    title = bling_admin.strings.error;
+                    break;
+                case 'warning':
+                    title = bling_admin.strings.warning || 'Aviso';
+                    break;
+                default:
+                    title = bling_admin.strings.info || 'Informação';
+            }
+            
+            alert(title + ': ' + message);
         },
 
         /**
@@ -405,6 +430,30 @@
                     Bling.UI.showError(bling_admin.strings.error + ': ' + error);
                 }
             });
+        },
+
+        /**
+         * Make AJAX request with progress handling
+         */
+        request: function(options) {
+            var defaults = {
+                url: bling_admin.ajax_url,
+                type: 'POST',
+                data: {},
+                beforeSend: function() {},
+                success: function() {},
+                error: function() {},
+                complete: function() {}
+            };
+            
+            var settings = $.extend({}, defaults, options);
+            
+            // Add nonce if not provided
+            if (!settings.data.nonce && bling_admin.nonce) {
+                settings.data.nonce = bling_admin.nonce;
+            }
+            
+            return $.ajax(settings);
         }
     };
 
@@ -513,6 +562,113 @@
         handleAjaxError: function($container) {
             $container.html('<div class="notice notice-error inline"><p>' + bling_admin.strings.channels_load_error + '</p></div>' +
                           '<button type="button" id="bling-retry-load-channels" class="button button-small">' + bling_admin.strings.try_again + '</button>');
+        }
+    };
+
+    /**
+     * Meta Boxes Module
+     */
+    Bling.MetaBoxes = {
+        init: function() {
+            this.bindEvents();
+        },
+
+        bindEvents: function() {
+            // Handle create invoice button click
+            $(document).on('click', '.create-bling-invoice', this.handleCreateInvoice.bind(this));
+            
+            // Handle check status button click
+            $(document).on('click', '.check-bling-status', this.handleCheckStatus.bind(this));
+        },
+
+        handleCreateInvoice: function(e) {
+            e.preventDefault();
+            
+            var $button = $(e.currentTarget);
+            var orderId = $button.data('order-id');
+            
+            if (!Bling.UI.confirm(bling_admin.strings.confirm_create_invoice)) {
+                return;
+            }
+            
+            // Show loading state
+            Bling.UI.showLoading($button);
+            $button.text(bling_admin.strings.invoice_creating);
+            
+            // Make AJAX request
+            Bling.Ajax.request({
+                data: {
+                    action: 'bling_create_invoice_ajax',
+                    order_id: orderId,
+                    nonce: bling_admin.nonce,
+                },
+                success: function(response) {
+                    Bling.UI.hideLoading($button);
+                    $button.text(bling_admin.strings.create_invoice);
+                    
+                    if (response.success) {
+                        var invoiceId = response.data.invoice_id || response.data;
+                        Bling.UI.alert(
+                            bling_admin.strings.invoice_created + ' ' + 
+                            (invoiceId ? ('ID: ' + invoiceId) : ''),
+                            'success'
+                        );
+                        
+                        // Reload page to show updated status
+                        setTimeout(function() {
+                            location.reload();
+                        }, 2000);
+                    } else {
+                        var errorMsg = response.data || bling_admin.strings.error;
+                        Bling.UI.alert(errorMsg, 'error');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    Bling.UI.hideLoading($button);
+                    $button.text(bling_admin.strings.create_invoice);
+                    Bling.UI.alert(bling_admin.strings.request_error, 'error');
+                }
+            });
+        },
+
+        handleCheckStatus: function(e) {
+            e.preventDefault();
+            
+            var $button = $(e.currentTarget);
+            var orderId = $button.data('order-id');
+            
+            // Show loading state
+            Bling.UI.showLoading($button);
+            $button.text(bling_admin.strings.invoice_checking);
+            
+            // Make AJAX request
+            Bling.Ajax.request({
+                data: {
+                    action: 'bling_check_invoice_status_ajax',
+                    order_id: orderId,
+                    nonce: bling_admin.nonce,
+                },
+                success: function(response) {
+                    Bling.UI.hideLoading($button);
+                    $button.text(bling_admin.strings.update_status);
+                    
+                    if (response.success) {
+                        var status = response.data.status || response.data;
+                        Bling.UI.alert(
+                            bling_admin.strings.status + ': ' + status,
+                            'success'
+                        );
+                    } else {
+                        var errorMsg = response.data || bling_admin.strings.error;
+                        Bling.UI.alert(errorMsg, 'error');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    Bling.UI.hideLoading($button);
+                    $button.text(bling_admin.strings.update_status);
+                    Bling.UI.alert(bling_admin.strings.request_error, 'error');
+                }
+            });
         }
     };
 
