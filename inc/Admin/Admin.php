@@ -9,7 +9,8 @@ defined('ABSPATH') || exit;
  * Handles the WordPress admin settings page for the Bling integration.
  *
  * @since 1.0.0
- * @package MeuMouse.com
+ * @package MeuMouse\Joinotify\Bling\Admin
+ * @author MeuMouse.com
  */
 class Admin {
 

@@ -14,7 +14,8 @@ use Automattic\WooCommerce\Internal\DataStores\Orders\CustomOrdersTableControlle
  *
  * @since 1.0.0
  * @version 1.0.1
- * @package MeuMouse.com
+ * @package MeuMouse\Joinotify\Bling\Integrations
+ * @author MeuMouse.com
  */
 class Woocommerce {
     
@@ -302,6 +303,7 @@ class Woocommerce {
             );
 
             $send = Client::send_invoice_to_sefaz( $invoice_id );
+            $this->update_invoice_details_from_bling( $order, $invoice_id );
             
             if ( is_wp_error( $send ) ) {
                 error_log(
@@ -1307,5 +1309,47 @@ class Woocommerce {
         }
 
         return 'Centro';
+    }
+
+
+    /**
+     * Fetch invoice details from Bling and update order meta.
+     *
+     * @since 1.0.2
+     * @param WC_Order $order | Order object
+     * @param int $invoice_id | NFe ID
+     * @return void
+     */
+    private function update_invoice_details_from_bling( $order, $invoice_id ) {
+        $response = Client::get_invoice( $invoice_id );
+
+        if ( is_wp_error( $response ) || empty( $response['data']['data'][0] ) ) {
+            return;
+        }
+
+        $invoice = $response['data']['data'][0];
+
+        // Link DANFE
+        if ( ! empty( $invoice['linkDanfe'] ) ) {
+            $order->update_meta_data( '_bling_danfe_link', $invoice['linkDanfe'] );
+        }
+
+        // access key from invoice
+        if ( ! empty( $invoice['chaveAcesso'] ) ) {
+            $order->update_meta_data( '_bling_invoice_access_key', $invoice['chaveAcesso'] );
+        }
+
+        // current situation from invoice
+        if ( isset( $invoice['situacao'] ) ) {
+            $order->update_meta_data( '_bling_invoice_status', $invoice['situacao'] );
+        }
+
+        $order->save();
+
+        if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+            error_log(
+                '[JOINOTIFY - BLING ERP]: Detalhes da NF atualizados (DANFE / chave / status) para pedido #' . $order->get_id()
+            );
+        }
     }
 }

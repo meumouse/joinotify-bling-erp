@@ -9,7 +9,8 @@ defined('ABSPATH') || exit;
  * Handle plugin hooks
  *
  * @since 1.0.0
- * @package MeuMouse.com
+ * @package MeuMouse\Joinotify\Bling\Core
+ * @author MeuMouse.com
  */
 class Hooks {
     

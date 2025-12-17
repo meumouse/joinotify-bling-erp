@@ -11,7 +11,8 @@ defined('ABSPATH') || exit;
  * Asset management for Bling integration.
  *
  * @since 1.0.0
- * @package MeuMouse.com
+ * @package MeuMouse\Joinotify\Bling\Core
+ * @author MeuMouse.com
  */
 class Assets {
     

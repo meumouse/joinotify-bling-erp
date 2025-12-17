@@ -6,7 +6,7 @@
  * Requires Plugins: 		woocommerce, joinotify
  * Author:                  MeuMouse.com
  * Author URI: 				https://meumouse.com/?utm_source=wordpress&utm_medium=plugins_list&utm_campaign=joinotify_bling_erp
- * Version:                 1.0.1
+ * Version:                 1.0.2
  * Requires at least:       5.6
  * Requires PHP:            7.4
  * Tested up to:      		6.9
