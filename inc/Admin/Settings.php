@@ -2,6 +2,8 @@
 
 namespace MeuMouse\Joinotify\Bling\Admin;
 
+use MeuMouse\Joinotify\Bling\API\Client;
+
 // Exit if accessed directly.
 defined('ABSPATH') || exit;
 
@@ -29,6 +31,8 @@ class Settings {
     /**
      * Register automation settings.
      *
+     * @since 1.0.0
+     * @version 1.0.1
      * @return void
      */
     public static function register_settings() {
@@ -40,8 +44,10 @@ class Settings {
         register_setting('bling-automation-group', 'bling_send_invoice_email');
         register_setting('bling-automation-group', 'bling_invoice_series');
         register_setting('bling-automation-group', 'bling_invoice_purpose');
+        register_setting('bling-automation-group', 'bling_sales_channel_id');
+        register_setting('bling-automation-group', 'bling_sales_channel_description');
     }
-    
+        
 
     /**
      * Add automation settings tab.
@@ -51,7 +57,7 @@ class Settings {
      */
     public static function add_settings_tab($tabs) {
         $tabs['automation'] = __('Automação NFe', 'joinotify-bling-erp');
-        
+
         return $tabs;
     }
     
@@ -59,11 +65,13 @@ class Settings {
     /**
      * Render automation settings tab.
      *
-     * @param string $tab Current tab.
+     * @since 1.0.0
+     * @version 1.0.1
+     * @param string $tab | Current tab.
      * @return void
      */
-    public static function render_settings_tab($tab) {
-        if ($tab !== 'automation') {
+    public static function render_settings_tab( $tab ) {
+        if ( $tab !== 'automation' ) {
             return;
         }
         
@@ -75,8 +83,12 @@ class Settings {
         $send_email = get_option('bling_send_invoice_email', 'yes');
         $invoice_series = get_option('bling_invoice_series', '1');
         $invoice_purpose = get_option('bling_invoice_purpose', '1');
-        
-        ?>
+        $sales_channel_id = get_option('bling_sales_channel_id', '');
+
+        // Try to get sales channels
+        $sales_channels = Client::get_sales_channels_from_bling();
+        $has_sales_channels = !is_wp_error($sales_channels) && !empty($sales_channels); ?>
+
         <form method="post" action="options.php">
             <?php settings_fields('bling-automation-group'); ?>
             
@@ -145,6 +157,55 @@ class Settings {
                                 <?php echo esc_html__('Desmarcar todos', 'joinotify-bling-erp'); ?>
                             </button>
                         </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <th scope="row">
+                        <label for="bling_sales_channel_id">
+                            <?php echo esc_html__('Canal de Venda', 'joinotify-bling-erp'); ?>
+                        </label>
+                    </th>
+                    <td>
+                        <div id="bling-sales-channel-container">
+                            <?php if (is_wp_error($sales_channels)) : ?>
+                                <div class="notice notice-error inline">
+                                    <p><?php echo esc_html__('Erro ao carregar canais de venda:', 'joinotify-bling-erp'); ?> 
+                                       <?php echo esc_html($sales_channels->get_error_message()); ?></p>
+                                </div>
+                                <button type="button" id="bling-retry-load-channels" class="button button-small">
+                                    <?php echo esc_html__('Tentar novamente', 'joinotify-bling-erp'); ?>
+                                </button>
+                            <?php elseif (!$has_sales_channels) : ?>
+                                <div class="notice notice-warning inline">
+                                    <p><?php echo esc_html__('Nenhum canal de venda encontrado ou não foi possível carregar.', 'joinotify-bling-erp'); ?></p>
+                                </div>
+                                <button type="button" id="bling-retry-load-channels" class="button button-small">
+                                    <?php echo esc_html__('Tentar novamente', 'joinotify-bling-erp'); ?>
+                                </button>
+                            <?php else : ?>
+                                <select name="bling_sales_channel_id" id="bling_sales_channel_id" class="regular-text">
+                                    <option value=""><?php echo esc_html__('-- Selecione um canal --', 'joinotify-bling-erp'); ?></option>
+                                    <?php foreach ($sales_channels as $channel) : ?>
+                                        <option value="<?php echo esc_attr($channel['id']); ?>" 
+                                                <?php selected($sales_channel_id, $channel['id']); ?>
+                                                data-type="<?php echo esc_attr($channel['tipo']); ?>">
+                                            <?php echo esc_html($channel['descricao']); ?>
+                                            <?php if ($channel['tipo']) : ?>
+                                                (<?php echo esc_html($channel['tipo']); ?>)
+                                            <?php endif; ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            <?php endif; ?>
+                        </div>
+                        <p class="description">
+                            <?php echo esc_html__('Selecione o canal de venda que será usado nas notas fiscais. Este campo é opcional.', 'joinotify-bling-erp'); ?>
+                        </p>
+                        <button type="button" id="bling-refresh-channels" class="button button-small" style="margin-top: 5px;">
+                            <span class="dashicons dashicons-update" style="vertical-align: middle; margin-top: -2px;"></span>
+                            <?php echo esc_html__('Atualizar lista', 'joinotify-bling-erp'); ?>
+                        </button>
                     </td>
                 </tr>
                 

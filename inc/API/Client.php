@@ -3,6 +3,7 @@
 namespace MeuMouse\Joinotify\Bling\API;
 
 use WP_Error;
+use Exception;
 
 // Exit if accessed directly.
 defined('ABSPATH') || exit;
@@ -294,10 +295,64 @@ class Client {
      * Send invoice to SEFAZ
      *
      * @since 1.0.1
-     * @param int $invoice_id
+     * @param int $invoice_id | NFe ID
      * @return array|WP_Error
      */
     public static function send_invoice_to_sefaz( $invoice_id ) {
         return self::request( 'POST', '/nfe/' . intval( $invoice_id ) . '/enviar' );
+    }
+
+
+    /**
+     * Get sales channels from Bling.
+     *
+     * @since 1.0.1
+     * @return array|WP_Error Sales channels or error.
+     */
+    public static function get_sales_channels() {
+        return self::request( 'GET', '/canais-venda' );
+    }
+
+
+    /**
+     * Get sales channels from Bling API
+     *
+     * @since 1.0.1
+     * @return array|WP_Error
+     */
+    public static function get_sales_channels_from_bling() {
+        try {
+            $response = self::get_sales_channels();
+            
+            if (is_wp_error($response)) {
+                return $response;
+            }
+            
+            if ($response['status'] !== 200) {
+                return new WP_Error('api_error', 'Erro ao buscar canais de venda');
+            }
+            
+            $channels = array();
+            
+            if (isset($response['data']['data']) && is_array($response['data']['data'])) {
+                foreach ($response['data']['data'] as $channel) {
+                    if (isset($channel['id']) && isset($channel['descricao'])) {
+                        // Filter only active channels (situacao: 1 = Ativo, 2 = Inativo)
+                        if (($channel['situacao'] ?? 1) == 1) {
+                            $channels[] = array(
+                                'id' => $channel['id'],
+                                'descricao' => $channel['descricao'],
+                                'tipo' => $channel['tipo'] ?? '',
+                                'situacao' => $channel['situacao'] ?? 1
+                            );
+                        }
+                    }
+                }
+            }
+            
+            return $channels;
+        } catch ( Exception $e ) {
+            return new WP_Error( 'exception', $e->getMessage() );
+        }
     }
 }

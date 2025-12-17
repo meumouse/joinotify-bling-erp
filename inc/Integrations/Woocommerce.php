@@ -606,8 +606,8 @@ class Woocommerce {
      *
      * @since 1.0.0
      * @version 1.0.1
-     * @param WC_Order $order WooCommerce order.
-     * @param int|null $customer_id Customer ID in Bling.
+     * @param WC_Order $order | WooCommerce order.
+     * @param int|null $customer_id | Customer ID in Bling.
      * @return array Invoice data.
      */
     private function prepare_invoice_data( $order, $customer_id = null ) {
@@ -635,11 +635,8 @@ class Woocommerce {
 
         // Get site URL for observation
         $site_url = get_site_url();
-        $observation = sprintf(
-            'Pedido #%d - Site: %s',
-            $order->get_id(),
-            $site_url
-        );
+
+        $observation = sprintf( __( 'Pedido #%d - Site: %s', 'joinotify-bling-erp' ), $order->get_id(), $site_url );
 
         $data = array(
             'serie' => $this->config['invoice_series'],
@@ -658,6 +655,23 @@ class Woocommerce {
                 ),
             ),
         );
+
+        // Add sales channel if configured
+        $sales_channel_id = get_option('bling_sales_channel_id', '');
+
+        if ( $sales_channel_id ) {
+            // Try to get channel description
+            $channel_description = $this->get_sales_channel_description( $sales_channel_id );
+            
+            $data['loja'] = array(
+                'id' => (int) $sales_channel_id,
+                'numero' => $channel_description ?: 'Site: ' . $site_url,
+            );
+            
+            if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+                error_log( '[JOINOTIFY - BLING ERP]: Canal de venda configurado: ID=' . $sales_channel_id . ', Descrição=' . $channel_description );
+            }
+        }
 
         if ( $customer_id ) {
             // Get full contact data from Bling
@@ -774,6 +788,104 @@ class Woocommerce {
             'tipo'       => 'P',
             'origem'     => 0,
         );
+    }
+
+
+    /**
+     * Get sales channel description from Bling
+     *
+     * @since 1.0.1
+     * @param int $channel_id | Sales channel ID
+     * @return string|null Channel description or null if not found
+     */
+    private function get_sales_channel_description( $channel_id ) {
+        try {
+            // Try to get from cache first
+            $cache_key = 'bling_sales_channel_' . $channel_id;
+            $cached_description = get_transient( $cache_key );
+            
+            if ( $cached_description !== false ) {
+                return $cached_description;
+            }
+            
+            // If not in cache, fetch from API
+            $response = Client::get_sales_channel( $channel_id );
+            
+            if ( is_wp_error( $response ) || $response['status'] !== 200 ) {
+                // Try to get from the list of all channels
+                $all_channels = $this->get_all_sales_channels();
+                
+                if ( is_array( $all_channels ) ) {
+                    foreach ( $all_channels as $channel ) {
+                        if ( $channel['id'] == $channel_id ) {
+                            // Cache for 1 hour
+                            set_transient( $cache_key, $channel['descricao'], HOUR_IN_SECONDS );
+                            return $channel['descricao'];
+                        }
+                    }
+                }
+                
+                return null;
+            }
+            
+            if ( isset( $response['data']['data']['descricao'] ) ) {
+                $description = $response['data']['data']['descricao'];
+                // Cache for 1 hour
+                set_transient( $cache_key, $description, HOUR_IN_SECONDS );
+                return $description;
+            }
+            
+            return null;
+            
+        } catch ( \Exception $e ) {
+            error_log( '[JOINOTIFY - BLING ERP]: Erro ao buscar canal de venda: ' . $e->getMessage() );
+            return null;
+        }
+    }
+
+    
+    /**
+     * Get all sales channels with caching
+     *
+     * @since 1.0.1
+     * @return array|WP_Error Array of channels or error
+     */
+    private function get_all_sales_channels() {
+        $cache_key = 'bling_all_sales_channels';
+        $cached_channels = get_transient( $cache_key );
+        
+        if ( $cached_channels !== false ) {
+            return $cached_channels;
+        }
+        
+        $response = Client::get_sales_channels();
+        
+        if ( is_wp_error( $response ) || $response['status'] !== 200 ) {
+            return $response;
+        }
+        
+        $channels = array();
+        
+        if ( isset( $response['data']['data'] ) && is_array( $response['data']['data'] ) ) {
+            foreach ( $response['data']['data'] as $channel ) {
+                if ( isset( $channel['id'] ) && isset( $channel['descricao'] ) ) {
+                    // Filter only active channels (situacao: 1 = Ativo, 2 = Inativo)
+                    if ( ($channel['situacao'] ?? 1) == 1 ) {
+                        $channels[] = array(
+                            'id' => $channel['id'],
+                            'descricao' => $channel['descricao'],
+                            'tipo' => $channel['tipo'] ?? '',
+                            'situacao' => $channel['situacao'] ?? 1
+                        );
+                    }
+                }
+            }
+        }
+        
+        // Cache for 1 hour
+        set_transient( $cache_key, $channels, HOUR_IN_SECONDS );
+        
+        return $channels;
     }
 
 

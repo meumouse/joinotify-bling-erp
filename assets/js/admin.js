@@ -35,6 +35,7 @@
             Bling.Settings.init();
             Bling.Products.init();
             Bling.Orders.init();
+            Bling.SalesChannels.init();
         },
 
         /**
@@ -171,6 +172,29 @@
                     $(this).remove();
                 });
             }, 5000);
+        },
+
+        /**
+         * Show inline success message
+         */
+        showInlineSuccess: function($container, message) {
+            var $message = $('<div class="notice notice-success inline"><p>' + message + '</p></div>');
+            $container.prepend($message);
+            
+            // Remove message after 3 seconds
+            setTimeout(function() {
+                $message.fadeOut(300, function() {
+                    $(this).remove();
+                });
+            }, 3000);
+        },
+
+        /**
+         * Show inline error message
+         */
+        showInlineError: function($container, message) {
+            var $message = $('<div class="notice notice-error inline"><p>' + message + '</p></div>');
+            $container.html($message);
         },
 
         /**
@@ -406,6 +430,103 @@
             } else {
                 $('.bling-trigger-statuses').hide();
             }
+        }
+    };
+
+    /**
+     * Sales Channels Module
+     */
+    Bling.SalesChannels = {
+        init: function() {
+            this.bindEvents();
+        },
+
+        bindEvents: function() {
+            // Handle refresh channels button click
+            $(document).on('click', '#bling-refresh-channels, #bling-retry-load-channels', this.handleRefreshChannels.bind(this));
+        },
+
+        handleRefreshChannels: function(e) {
+            e.preventDefault();
+            
+            var $button = $(e.currentTarget);
+            var originalText = $button.text();
+            var $container = $('#bling-sales-channel-container');
+            
+            // Show loading state
+            $button.prop('disabled', true).text(bling_admin.strings.loading);
+            
+            // Make AJAX request
+            $.ajax({
+                url: bling_admin.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'bling_get_sales_channels',
+                    nonce: bling_admin.nonce
+                },
+                success: function(response) {
+                    $button.prop('disabled', false).text(originalText);
+                    
+                    if (response.success) {
+                        Bling.SalesChannels.handleSuccessResponse(response.data, $container);
+                    } else {
+                        Bling.SalesChannels.handleErrorResponse(response.data, $container);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $button.prop('disabled', false).text(originalText);
+                    Bling.SalesChannels.handleAjaxError($container);
+                }
+            });
+        },
+
+        handleSuccessResponse: function(channels, $container) {
+            var currentValue = $('#bling_sales_channel_id').val();
+            
+            if (channels && channels.length > 0) {
+                var options = '<option value="">' + bling_admin.strings.select_channel + '</option>';
+                
+                channels.forEach(function(channel) {
+                    var selected = (currentValue == channel.id) ? 'selected' : '';
+                    var tipo = channel.tipo ? ' (' + channel.tipo + ')' : '';
+                    options += '<option value="' + channel.id + '" ' + selected + ' data-type="' + (channel.tipo || '') + '">' + 
+                               channel.descricao + tipo + '</option>';
+                });
+                
+                $container.html('<select name="bling_sales_channel_id" id="bling_sales_channel_id" class="regular-text">' + options + '</select>');
+                
+                // Show success message
+                Bling.UI.showInlineSuccess($container, bling_admin.strings.channels_loaded);
+            } else {
+                // No channels found
+                $container.html('<div class="notice notice-warning inline"><p>' + bling_admin.strings.no_channels_found + '</p></div>' +
+                              '<button type="button" id="bling-retry-load-channels" class="button button-small">' + bling_admin.strings.try_again + '</button>');
+            }
+        },
+
+        handleErrorResponse: function(errorMessage, $container) {
+            var message = bling_admin.strings.error + ': ' + (errorMessage || bling_admin.strings.unknown_error);
+            $container.html('<div class="notice notice-error inline"><p>' + message + '</p></div>' +
+                          '<button type="button" id="bling-retry-load-channels" class="button button-small">' + bling_admin.strings.try_again + '</button>');
+        },
+
+        handleAjaxError: function($container) {
+            $container.html('<div class="notice notice-error inline"><p>' + bling_admin.strings.channels_load_error + '</p></div>' +
+                          '<button type="button" id="bling-retry-load-channels" class="button button-small">' + bling_admin.strings.try_again + '</button>');
+        }
+    };
+
+    // Products Module (placeholder)
+    Bling.Products = {
+        init: function() {
+            // Product-related initialization
+        }
+    };
+
+    // Orders Module (placeholder)
+    Bling.Orders = {
+        init: function() {
+            // Order-related initialization
         }
     };
 

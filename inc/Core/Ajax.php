@@ -42,6 +42,9 @@ class Ajax {
 
         add_action( 'wp_ajax_bling_create_invoice_ajax', array( $this, 'ajax_create_invoice' ) );
         add_action( 'wp_ajax_bling_check_invoice_status_ajax', array( $this, 'ajax_check_invoice_status' ) );
+
+        // load sales channels
+        add_action('wp_ajax_bling_get_sales_channels', array(__CLASS__, 'ajax_get_sales_channels'));
     }
 
     
@@ -603,6 +606,29 @@ class Ajax {
             wp_send_json_success(array('status' => $status));
         } else {
             wp_send_json_error('Não foi possível obter o status da nota fiscal.');
+        }
+    }
+
+
+    /**
+     * AJAX handler to get sales channels
+     *
+     * @since 1.0.1
+     * @return void
+     */
+    public static function ajax_get_sales_channels() {
+        check_ajax_referer('bling_admin_nonce', 'nonce');
+        
+        if ( ! current_user_can('manage_options') ) {
+            wp_die('Unauthorized');
+        }
+        
+        $channels = Client::get_sales_channels_from_bling();
+        
+        if ( is_wp_error( $channels ) ) {
+            wp_send_json_error( $channels->get_error_message() );
+        } else {
+            wp_send_json_success( $channels );
         }
     }
 }
