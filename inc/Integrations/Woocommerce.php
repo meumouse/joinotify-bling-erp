@@ -278,6 +278,19 @@ class Woocommerce {
             // Save invoice ID to order meta
             $order->update_meta_data( '_bling_invoice_id', $invoice_id );
             $order->update_meta_data( '_bling_invoice_created', current_time('mysql') );
+
+            // Salvar número da NF (já vem na resposta de criação)
+            if ( isset( $response['data']['data']['numero'] ) ) {
+                $order->update_meta_data( '_bling_invoice_number', $response['data']['data']['numero'] );
+                error_log('[JOINOTIFY - BLING ERP]: Número NF salvo: ' . $response['data']['data']['numero']);
+            }
+
+            // Salvar série da NF
+            if ( isset( $response['data']['data']['serie'] ) ) {
+                $order->update_meta_data( '_bling_invoice_series', $response['data']['data']['serie'] );
+                error_log('[JOINOTIFY - BLING ERP]: Série NF salva: ' . $response['data']['data']['serie']);
+            }
+
             $order->save();
             
             // Log the action
@@ -1101,69 +1114,99 @@ class Woocommerce {
         $invoice_id = $order->get_meta('_bling_invoice_id');
         $invoice_number = $order->get_meta('_bling_invoice_number');
         $invoice_series = $order->get_meta('_bling_invoice_series');
+        $danfe_link = $order->get_meta('_bling_danfe_link');
         
         echo '<div class="bling-order-info">';
-            if ( $invoice_id ) {
-                echo '<p><strong>' . __('Nota Fiscal Bling:', 'joinotify-bling-erp') . '</strong></p>';
-                
-                // Show full invoice number (series + number) if available
-                if ( $invoice_number ) {
+        
+        if ( $invoice_id ) {
+            echo '<p><strong>' . __('Nota Fiscal Bling:', 'joinotify-bling-erp') . '</strong></p>';
+            
+            // Mostrar número completo da NF (série + número)
+            $full_invoice_number = '';
+
+            if ( $invoice_number ) {
+                $full_invoice_number = $invoice_number;
+                if ( $invoice_series ) {
+                    $full_invoice_number = $invoice_series . '/' . $invoice_number;
+                }
+            } else {
+                // Tentar obter o número da NF da API se não estiver salvo
+                $response = Client::get_invoice( $invoice_id );
+
+                if ( ! is_wp_error( $response ) && isset( $response['data']['data']['numero'] ) ) {
+                    $invoice_number = $response['data']['data']['numero'];
+                    $order->update_meta_data( '_bling_invoice_number', $invoice_number );
+                    $order->save();
+                    
                     $full_invoice_number = $invoice_number;
 
                     if ( $invoice_series ) {
                         $full_invoice_number = $invoice_series . '/' . $invoice_number;
                     }
-
-                    echo '<p>' . __('Número:', 'joinotify-bling-erp') . ' <strong>' . esc_html( $full_invoice_number ) . '</strong></p>';
-                }
-                
-                echo '<p>' . __('ID Bling:', 'joinotify-bling-erp') . ' ' . esc_html( $invoice_id ) . '</p>';
-                
-                // Get creation date if available
-                $invoice_created = $order->get_meta('_bling_invoice_created');
-                
-                if ( $invoice_created ) {
-                    echo '<p>' . __('Criada em:', 'joinotify-bling-erp') . ' ' . esc_html( date_i18n( get_option('date_format') . ' ' . get_option('time_format'), strtotime($invoice_created) ) ) . '</p>';
-                }
-                
-                // Get DANFE link from order meta (stored from webhook)
-                $danfe_link = $order->get_meta('_bling_danfe_link');
-                
-                // If we don't have the DANFE link stored, try to get it from API
-                if ( empty( $danfe_link ) ) {
-                    $danfe_link = $this->get_danfe_link_from_api( $invoice_id );
-                }
-                
-                // Display DANFE link button if available
-                if ( ! empty( $danfe_link ) ) {
-                    echo '<p><a href="' . esc_url( $danfe_link ) . '" target="_blank" class="button button-small button-primary" style="margin-right: 5px;">';
-                        echo '<span class="dashicons dashicons-external" style="vertical-align: middle; margin-top: -2px;"></span> ' . __('Consultar DANFE', 'joinotify-bling-erp');
-                    echo '</a></p>';
-                }
-                
-                // Add button to check invoice status
-                echo '<p><a href="#" class="button button-small check-bling-status" data-order-id="' . esc_attr( $order->get_id() ) . '" style="margin-right: 5px;">';
-                    echo '<span class="dashicons dashicons-update" style="vertical-align: middle; margin-top: -2px;"></span> ' . __('Atualizar Status', 'joinotify-bling-erp');
-                echo '</a></p>';
-                
-            } else {
-                echo '<p>' . __('Nenhuma nota fiscal criada no Bling para este pedido.', 'joinotify-bling-erp') . '</p>';
-                
-                // Show button to create invoice manually
-                if ( current_user_can('manage_woocommerce') ) {
-                    $create_url = wp_nonce_url(
-                        add_query_arg( array(
-                            'action' => 'bling_create_invoice',
-                            'order_id' => $order->get_id(),
-                        ), admin_url('admin-ajax.php') ),
-                        'bling_create_invoice_' . $order->get_id()
-                    );
-                    
-                    echo '<p><a href="' . esc_url( $create_url ) . '" class="button button-small button-primary create-bling-invoice" data-order-id="' . esc_attr( $order->get_id() ) . '">';
-                        echo '<span class="dashicons dashicons-media-document" style="vertical-align: middle; margin-top: -2px;"></span> ' . __('Criar Nota Fiscal', 'joinotify-bling-erp');
-                    echo '</a></p>';
                 }
             }
+            
+            if ( $full_invoice_number ) {
+                echo '<p>' . __('Número NF:', 'joinotify-bling-erp') . ' <strong>' . esc_html( $full_invoice_number ) . '</strong></p>';
+            }
+            
+            echo '<p>' . __('ID Bling:', 'joinotify-bling-erp') . ' ' . esc_html( $invoice_id ) . '</p>';
+            
+            // Obter criação data se disponível
+            $invoice_created = $order->get_meta('_bling_invoice_created');
+            if ( $invoice_created ) {
+                echo '<p>' . __('Criada em:', 'joinotify-bling-erp') . ' ' . esc_html( date_i18n( get_option('date_format') . ' ' . get_option('time_format'), strtotime($invoice_created) ) ) . '</p>';
+            }
+            
+            // Se não temos o link DANFE armazenado, tentar obter da API
+            if ( empty( $danfe_link ) ) {
+                $danfe_link = $this->get_danfe_link_from_api( $invoice_id );
+                if ( ! empty( $danfe_link ) ) {
+                    $order->update_meta_data( '_bling_danfe_link', $danfe_link );
+                    $order->save();
+                }
+            }
+            
+            // Exibir link DANFE se disponível
+            if ( ! empty( $danfe_link ) ) {
+                echo '<p>';
+                echo '<a href="' . esc_url( $danfe_link ) . '" target="_blank" class="button button-small button-primary" style="margin-right: 5px;">';
+                echo '<span class="dashicons dashicons-external" style="vertical-align: middle; margin-top: -2px;"></span> ' . __('Consultar DANFE', 'joinotify-bling-erp');
+                echo '</a>';
+                echo '</p>';
+                
+                // Também exibir o número da NF ao lado do botão se ainda não foi exibido
+                if ( empty( $full_invoice_number ) ) {
+                    echo '<p><small>' . __('Número NF:', 'joinotify-bling-erp') . ' ' . esc_html( $invoice_number ?: 'Não disponível' ) . '</small></p>';
+                }
+            } else {
+                echo '<p><em>' . __('Link DANFE não disponível', 'joinotify-bling-erp') . '</em></p>';
+            }
+            
+            // Adicionar botão para verificar status da nota fiscal
+            echo '<p><a href="#" class="button button-small check-bling-status" data-order-id="' . esc_attr( $order->get_id() ) . '" style="margin-right: 5px;">';
+            echo '<span class="dashicons dashicons-update" style="vertical-align: middle; margin-top: -2px;"></span> ' . __('Atualizar Status', 'joinotify-bling-erp');
+            echo '</a></p>';
+            
+        } else {
+            echo '<p>' . __('Nenhuma nota fiscal criada no Bling para este pedido.', 'joinotify-bling-erp') . '</p>';
+            
+            // Mostrar botão para criar nota fiscal manualmente
+            if ( current_user_can('manage_woocommerce') ) {
+                $create_url = wp_nonce_url(
+                    add_query_arg( array(
+                        'action' => 'bling_create_invoice',
+                        'order_id' => $order->get_id(),
+                    ), admin_url('admin-ajax.php') ),
+                    'bling_create_invoice_' . $order->get_id()
+                );
+                
+                echo '<p><a href="' . esc_url( $create_url ) . '" class="button button-small button-primary create-bling-invoice" data-order-id="' . esc_attr( $order->get_id() ) . '">';
+                echo '<span class="dashicons dashicons-media-document" style="vertical-align: middle; margin-top: -2px;"></span> ' . __('Criar Nota Fiscal', 'joinotify-bling-erp');
+                echo '</a></p>';
+            }
+        }
+        
         echo '</div>';
     }
 
