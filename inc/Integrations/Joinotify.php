@@ -9,11 +9,14 @@ use MeuMouse\Joinotify\Admin\Admin as Joinotify_Admin;
 defined('ABSPATH') || exit;
 
 if ( class_exists('MeuMouse\Joinotify\Integrations\Integrations_Base') ) {
+
     /**
      * Integration with Bling ERP for Joinotify triggers and placeholders.
      *
      * @since 1.0.0
-     * @package MeuMouse.com
+     * @version 1.0.2
+     * @package MeuMouse\Joinotify\Bling\Integrations
+     * @author MeuMouse.com
      */
     class Joinotify extends Integrations_Base {
 
@@ -147,6 +150,7 @@ if ( class_exists('MeuMouse\Joinotify\Integrations\Integrations_Base') ) {
          * Define text placeholders for use in messages related to Bling events.
          *
          * @since 1.0.0
+         * @version 1.0.2
          * @param array $placeholders | Existing placeholders.
          * @param array $payload | Payload data from the trigger event.
          * @return array Modified placeholders including Bling placeholders.
@@ -169,14 +173,29 @@ if ( class_exists('MeuMouse\Joinotify\Integrations\Integrations_Base') ) {
             $total = is_numeric( $valorNota ) ? number_format( $valorNota, 2, ',', '.' ) : $valorNota;
             $client_name = isset( $invoice['contato']['nome'] ) ? $invoice['contato']['nome'] : '';
             $client_document = isset( $invoice['contato']['numeroDocumento'] ) ? $invoice['contato']['numeroDocumento'] : '';
-            $client_phone = isset( $invoice['contato']['telefone'] ) ? $invoice['contato']['telefone'] : '';
             $client_email = isset( $invoice['contato']['email'] ) ? $invoice['contato']['email'] : '';
             $dataEmissao = isset( $invoice['dataEmissao'] ) ? $invoice['dataEmissao'] : '';
             $chaveAcesso = isset( $invoice['chaveAcesso'] ) ? $invoice['chaveAcesso'] : '';
             $linkDanfe = isset( $invoice['linkDanfe'] ) ? $invoice['linkDanfe'] : '';
             $linkPDF = isset( $invoice['linkPDF'] ) ? $invoice['linkPDF'] : '';
             $linkXML = isset( $invoice['xml'] ) ? $invoice['xml'] : '';
-            
+            $client_phone = '';
+
+            $invoice_id = $invoice['id'] ?? '';
+
+            if ( ! empty( $invoice_id ) ) {
+                $order = $this->get_order_by_bling_invoice_id( $invoice_id );
+
+                if ( $order instanceof \WC_Order ) {
+                    $client_phone = $order->get_billing_phone();
+                }
+            }
+
+            // Fallback para telefone do Bling
+            if ( empty( $client_phone ) ) {
+                $client_phone = $invoice['contato']['telefone'] ?? '';
+            }
+
             // Get product information (all items)
             $item_desc = '';
             $item_qtd = '';
@@ -438,6 +457,30 @@ if ( class_exists('MeuMouse\Joinotify\Integrations\Integrations_Base') ) {
             } else {
                 echo '<p class="description">' . esc_html__( 'Após ativar, configure o Bling em Joinotify > Bling ERP.', 'joinotify-bling-erp' ) . '</p>';
             }
+        }
+
+
+        /**
+         * Get WooCommerce order by Bling invoice ID.
+         *
+         * @since 1.0.2
+         * @param string|int $invoice_id
+         * @return WC_Order|null
+         */
+        private function get_order_by_bling_invoice_id( $invoice_id ) {
+            if ( empty( $invoice_id ) ) {
+                return null;
+            }
+
+            $orders = wc_get_orders( array(
+                'limit'      => 1,
+                'meta_key'   => '_bling_invoice_id',
+                'meta_value' => $invoice_id,
+                'orderby'    => 'date',
+                'order'      => 'DESC',
+            ) );
+
+            return ! empty( $orders ) ? $orders[0] : null;
         }
     }
 }

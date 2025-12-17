@@ -11,7 +11,8 @@ defined('ABSPATH') || exit;
  * Plugin class to initialize integration components.
  *
  * @since 1.0.0
- * @package MeuMouse.com
+ * @package MeuMouse\Joinotify\Bling\Core
+ * @author MeuMouse.com
  */
 class Plugin {
     
@@ -21,7 +22,7 @@ class Plugin {
      * @since 1.0.0
      * @return string
      */
-    public const VERSION = '1.0.1';
+    public const VERSION = '1.0.2';
 
     /**
      * Plugin slug.

@@ -14,7 +14,8 @@ use Automattic\WooCommerce\Internal\DataStores\Orders\CustomOrdersTableControlle
  *
  * @since 1.0.0
  * @version 1.0.1
- * @package MeuMouse.com
+ * @package MeuMouse\Joinotify\Bling\Integrations
+ * @author MeuMouse.com
  */
 class Woocommerce {
     

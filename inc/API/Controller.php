@@ -15,7 +15,8 @@ defined('ABSPATH') || exit;
  * Handles the OAuth and Webhook REST API endpoints for Bling integration.
  *
  * @since 1.0.0
- * @package MeuMouse.com
+ * @package MeuMouse\Joinotify\Bling\API
+ * @author MeuMouse.com
  */
 class Controller {
 

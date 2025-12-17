@@ -11,7 +11,8 @@ defined('ABSPATH') || exit;
  * NFe Automation Settings.
  *
  * @since 1.0.0
- * @package MeuMouse.com
+ * @package MeuMouse\Joinotify\Bling\Admin
+ * @author MeuMouse.com
  */
 class Settings {
     

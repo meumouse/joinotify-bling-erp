@@ -13,7 +13,8 @@ defined('ABSPATH') || exit;
  *
  * @since 1.0.0
  * @version 1.0.1
- * @package MeuMouse.com
+ * @package MeuMouse\Joinotify\Bling\Core
+ * @author MeuMouse.com
  */
 class Ajax {
     
