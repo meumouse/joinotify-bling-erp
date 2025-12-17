@@ -163,6 +163,10 @@ class Woocommerce {
      */
     public function create_invoice_for_order( $order ) {
         try {
+            if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+                error_log( '[JOINOTIFY - BLING ERP]: Iniciando criação de NF para pedido #' . $order->get_id() );
+            }
+
             // First, ensure customer exists in Bling if sync is enabled
             $customer_id = null;
 
@@ -183,18 +187,66 @@ class Woocommerce {
             }
 
             if ( $this->config['sync_customers'] && $customer_id ) {
-                $customer_data = $this->prepare_customer_data( $order );
+                // first, get updated data from contact
+                $contact_response = Client::get_contact( $customer_id );
+                
+                if ( ! is_wp_error( $contact_response ) && isset( $contact_response['data']['data'] ) ) {
+                    $contact_data = $contact_response['data']['data'];
+                    
+                    // use the contact data for validation
+                    $validation = $this->validate_contact_data_for_invoice( $contact_data );
+                    
+                    if ( is_wp_error( $validation ) ) {
+                        if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+                            error_log( '[JOINOTIFY - BLING ERP]: Dados do contato incompletos: ' . $validation->get_error_message() );
+                            error_log( '[JOINOTIFY - BLING ERP]: Dados do contato: ' . print_r( $contact_data, true ) );
+                        }
+            
+                        // if missing data, try update it with from woocommerce
+                        $woo_customer_data = $this->prepare_customer_data( $order );
+                        $merged_data = $this->merge_contact_data( $contact_data, $woo_customer_data );
+                        $merged_validation = $this->validate_contact_data_for_invoice( $merged_data );
+                        
+                        if ( is_wp_error( $merged_validation ) ) {
+                            return new WP_Error(
+                                'contact_data_incomplete',
+                                sprintf(
+                                    'Não foi possível emitir a NF-e. Dados do cliente incompletos no Bling: %s',
+                                    $merged_validation->get_error_message()
+                                )
+                            );
+                        } else {
+                            $update_response = Client::save_contact( array_merge(
+                                array( 'id' => $customer_id ),
+                                $merged_data
+                            ));
+                            
+                            if ( is_wp_error( $update_response ) ) {
+                                error_log( '[JOINOTIFY - BLING ERP]: Erro ao atualizar cliente: ' . $update_response->get_error_message() );
+                            }
+                        }
+                    }
+                } else {
+                    if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+                        error_log( '[JOINOTIFY - BLING ERP]: Não foi possível buscar dados do contato ID: ' . $customer_id );
+                    }
 
-                $validation = $this->validate_contact_data_for_invoice( $customer_data );
+                    $customer_data = $this->prepare_customer_data( $order );
+                    $validation = $this->validate_contact_data_for_invoice( $customer_data );
+                    
+                    if ( is_wp_error( $validation ) ) {
+                        return $validation;
+                    }
+                    
+                    $update_response = Client::save_contact( array_merge(
+                        array( 'id' => $customer_id ),
+                        $customer_data
+                    ));
 
-                if ( is_wp_error( $validation ) ) {
-                    return $validation;
+                    if ( is_wp_error( $update_response ) ) {
+                        error_log( '[JOINOTIFY - BLING ERP]: Erro ao atualizar cliente: ' . $update_response->get_error_message() );
+                    }
                 }
-
-                Client::save_contact( array_merge(
-                    array( 'id' => $customer_id ),
-                    $customer_data
-                ));
             }
                         
             // Create invoice in Bling
@@ -280,6 +332,7 @@ class Woocommerce {
      * Sync order customer to Bling.
      *
      * @since 1.0.0
+     * @version 1.0.1 - Use existing contact data from Bling
      * @param WC_Order $order Order object
      * @return int|WP_Error Customer ID in Bling.
      */
@@ -295,7 +348,7 @@ class Woocommerce {
             }
         }
         
-        // Prepare customer data
+        // Prepare customer data from WooCommerce
         $customer_data = $this->prepare_customer_data( $order );
         
         // Skip if no CPF/CNPJ
@@ -311,6 +364,37 @@ class Woocommerce {
         $existing_contact_id = $this->find_contact_by_document( $customer_data['numeroDocumento'] );
 
         if ( ! is_wp_error( $existing_contact_id ) && $existing_contact_id ) {
+            // Get full contact data from Bling
+            $existing_contact = Client::get_contact( $existing_contact_id );
+            
+            if ( ! is_wp_error( $existing_contact ) && isset( $existing_contact['data']['data'] ) ) {
+                $bling_contact_data = $existing_contact['data']['data'];
+                
+                if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+                    error_log( '[JOINOTIFY - BLING ERP]: Dados completos do contato do Bling: ' . print_r( $bling_contact_data, true ) );
+                }
+                
+                // Merge data: use Bling data, but update with WooCommerce data if missing
+                $merged_data = $this->merge_contact_data( $bling_contact_data, $customer_data );
+                
+                // Update contact with merged data
+                $response = Client::save_contact( $merged_data );
+                
+                if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+                    error_log( '[JOINOTIFY - BLING ERP]: Resposta ao atualizar cliente. ' . print_r( $response, true ) );
+                }
+                
+                if ( is_wp_error( $response ) ) {
+                    error_log( '[JOINOTIFY - BLING ERP]: Erro ao atualizar cliente: ' . $response->get_error_message() );
+                    // Return existing ID even if update fails
+                }
+            }
+            
+            // Save contact ID to user meta for future use
+            if ( $user_id ) {
+                update_user_meta( $user_id, '_bling_contact_id', $existing_contact_id );
+            }
+            
             return $existing_contact_id;
         }
 
@@ -337,6 +421,70 @@ class Woocommerce {
         }
         
         return $contact_id;
+    }
+
+
+    /**
+     * Merge contact data from Bling with WooCommerce data
+     *
+     * @since 1.0.1
+     * @param array $bling_data | Contact data from Bling
+     * @param array $woo_data | Contact data from WooCommerce
+     * @return array Merged contact data
+     */
+    private function merge_contact_data( $bling_data, $woo_data ) {
+        // Start with Bling data as base
+        $merged = $bling_data;
+        
+        // Preserve the contact ID
+        if ( isset( $bling_data['id'] ) ) {
+            $merged['id'] = $bling_data['id'];
+        }
+        
+        // Update name if WooCommerce has a name and Bling doesn't or it's different
+        if ( ! empty( $woo_data['nome'] ) && ( empty( $bling_data['nome'] ) || $bling_data['nome'] !== $woo_data['nome'] ) ) {
+            $merged['nome'] = $woo_data['nome'];
+        }
+        
+        // Update email if missing in Bling
+        if ( ! empty( $woo_data['email'] ) && empty( $bling_data['email'] ) ) {
+            $merged['email'] = $woo_data['email'];
+            // Also update emailNotaFiscal if it's empty
+            if ( empty( $bling_data['emailNotaFiscal'] ) ) {
+                $merged['emailNotaFiscal'] = $woo_data['email'];
+            }
+        }
+        
+        // Update phone if missing in Bling
+        if ( ! empty( $woo_data['telefone'] ) && ( empty( $bling_data['telefone'] ) && empty( $bling_data['celular'] ) ) ) {
+            $merged['telefone'] = $woo_data['telefone'];
+        }
+        
+        // Update address if missing in Bling
+        if ( isset( $woo_data['endereco']['geral'] ) ) {
+            $woo_endereco = $woo_data['endereco']['geral'];
+            
+            // Initialize address structure if not exists
+            if ( ! isset( $merged['endereco'] ) ) {
+                $merged['endereco'] = array(
+                    'geral' => array(),
+                    'cobranca' => isset( $bling_data['endereco']['cobranca'] ) ? $bling_data['endereco']['cobranca'] : array()
+                );
+            } elseif ( ! isset( $merged['endereco']['geral'] ) ) {
+                $merged['endereco']['geral'] = array();
+            }
+            
+            // Update each address field if missing in Bling
+            $address_fields = array( 'endereco', 'numero', 'complemento', 'bairro', 'cep', 'municipio', 'uf' );
+            foreach ( $address_fields as $field ) {
+                if ( ! empty( $woo_endereco[ $field ] ) && 
+                    ( ! isset( $merged['endereco']['geral'][ $field ] ) || empty( $merged['endereco']['geral'][ $field ] ) ) ) {
+                    $merged['endereco']['geral'][ $field ] = $woo_endereco[ $field ];
+                }
+            }
+        }
+        
+        return $merged;
     }
 
     
@@ -485,6 +633,14 @@ class Woocommerce {
             );
         }
 
+        // Get site URL for observation
+        $site_url = get_site_url();
+        $observation = sprintf(
+            'Pedido #%d - Site: %s',
+            $order->get_id(),
+            $site_url
+        );
+
         $data = array(
             'serie' => $this->config['invoice_series'],
             'numeroLoja' => (string) $order->get_id(),
@@ -498,15 +654,30 @@ class Woocommerce {
                 array(
                     'data' => date('Y-m-d'),
                     'valor' => (float) $order->get_total(),
-                    'observacoes' => 'Pedido #' . $order->get_id(),
+                    'observacoes' => $observation,
                 ),
             ),
         );
 
         if ( $customer_id ) {
-            $data['contato'] = array(
-                'id' => (int) $customer_id,
-            );
+            // Get full contact data from Bling
+            $contact_response = Client::get_contact( $customer_id );
+            
+            if ( ! is_wp_error( $contact_response ) && isset( $contact_response['data']['data'] ) ) {
+                $contact_data = $contact_response['data']['data'];
+                
+                if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+                    error_log( '[JOINOTIFY - BLING ERP]: Dados do contato para NF: ' . print_r( $contact_data, true ) );
+                }
+                
+                // Prepare contact data for invoice according to Bling API format
+                $data['contato'] = $this->prepare_contact_for_invoice( $contact_data );
+            } else {
+                // Fallback: use just the ID
+                $data['contato'] = array(
+                    'id' => (int) $customer_id,
+                );
+            }
         }
 
         $shipping_total = (float) $order->get_shipping_total();
@@ -519,6 +690,50 @@ class Woocommerce {
         }
 
         return $data;
+    }
+
+
+    /**
+     * Prepare contact data for invoice in Bling API format
+     *
+     * @since 1.0.1
+     * @param array $contact_data Full contact data from Bling
+     * @return array Contact data formatted for invoice
+     */
+    private function prepare_contact_for_invoice( $contact_data ) {
+        $contact_for_invoice = array(
+            'id' => (int) $contact_data['id'],
+            'nome' => isset($contact_data['nome']) ? $contact_data['nome'] : '',
+            'numeroDocumento' => isset($contact_data['numeroDocumento']) ? $contact_data['numeroDocumento'] : '',
+            'ie' => isset($contact_data['ie']) ? $contact_data['ie'] : '',
+            'rg' => isset($contact_data['rg']) ? $contact_data['rg'] : '',
+            'telefone' => isset($contact_data['telefone']) ? $contact_data['telefone'] : '',
+            'email' => isset($contact_data['email']) ? $contact_data['email'] : '',
+            'endereco' => array(
+                'endereco' => '',
+                'numero' => '',
+                'complemento' => '',
+                'bairro' => '',
+                'cep' => '',
+                'municipio' => '',
+                'uf' => ''
+            )
+        );
+
+        // Add address data if available
+        if ( isset($contact_data['endereco']['geral']) ) {
+            $address = $contact_data['endereco']['geral'];
+            
+            if ( !empty($address['endereco']) ) $contact_for_invoice['endereco']['endereco'] = $address['endereco'];
+            if ( !empty($address['numero']) ) $contact_for_invoice['endereco']['numero'] = $address['numero'];
+            if ( !empty($address['complemento']) ) $contact_for_invoice['endereco']['complemento'] = $address['complemento'];
+            if ( !empty($address['bairro']) ) $contact_for_invoice['endereco']['bairro'] = $address['bairro'];
+            if ( !empty($address['cep']) ) $contact_for_invoice['endereco']['cep'] = $address['cep'];
+            if ( !empty($address['municipio']) ) $contact_for_invoice['endereco']['municipio'] = $address['municipio'];
+            if ( !empty($address['uf']) ) $contact_for_invoice['endereco']['uf'] = $address['uf'];
+        }
+
+        return $contact_for_invoice;
     }
 
     
@@ -569,33 +784,69 @@ class Woocommerce {
      * @param array $customer_data
      * @return true|WP_Error
      */
-    private function validate_contact_data_for_invoice( $customer_data ) {
+    private function validate_contact_data_for_invoice( $contact_data ) {
+        if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+            error_log( '[JOINOTIFY - BLING ERP]: Validando dados do contato: ' . print_r( $contact_data, true ) );
+        }
+
+        // Check required basic fields
         $required_fields = array(
-            'nome',
-            'numeroDocumento',
-            'endereco.geral.endereco',
-            'endereco.geral.numero',
-            'endereco.geral.bairro',
-            'endereco.geral.cep',
-            'endereco.geral.municipio',
-            'endereco.geral.uf',
+            'nome' => 'Nome',
+            'numeroDocumento' => 'CPF/CNPJ',
         );
 
-        foreach ( $required_fields as $field ) {
-            $value = $customer_data;
+        foreach ( $required_fields as $field => $label ) {
+            if ( ! isset( $contact_data[ $field ] ) || empty( trim( $contact_data[ $field ] ) ) ) {
+                return new WP_Error(
+                    'missing_contact_data',
+                    sprintf(
+                        'Dados obrigatórios do cliente ausentes para emissão de NF-e: %s',
+                        $label
+                    )
+                );
+            }
+        }
 
-            foreach ( explode('.', $field) as $key ) {
-                if ( ! isset( $value[ $key ] ) || empty( $value[ $key ] ) ) {
-                    return new WP_Error(
-                        'missing_contact_data',
-                        sprintf(
-                            'Dados obrigatórios do cliente ausentes para emissão de NF-e: %s',
-                            $field
-                        )
-                    );
-                }
+        // Check address structure
+        $has_address = false;
+        $address_fields = array();
 
-                $value = $value[ $key ];
+        if ( isset( $contact_data['endereco']['geral'] ) ) {
+            // Bling structure
+            $has_address = true;
+            $address_fields = $contact_data['endereco']['geral'];
+        } elseif ( isset( $contact_data['endereco'] ) && is_array( $contact_data['endereco'] ) ) {
+            // Alternative structure
+            $has_address = true;
+            $address_fields = $contact_data['endereco'];
+        }
+
+        if ( ! $has_address ) {
+            return new WP_Error(
+                'missing_contact_data',
+                'Endereço do cliente ausente para emissão de NF-e'
+            );
+        }
+
+        // Check required address fields
+        $required_address_fields = array(
+            'endereco' => 'Endereço',
+            'numero' => 'Número',
+            'bairro' => 'Bairro',
+            'cep' => 'CEP',
+            'municipio' => 'Município',
+            'uf' => 'UF',
+        );
+
+        foreach ( $required_address_fields as $field => $label ) {
+            if ( ! isset( $address_fields[ $field ] ) || empty( trim( $address_fields[ $field ] ) ) ) {
+                return new WP_Error(
+                    'missing_contact_data',
+                    sprintf(
+                        'Dados obrigatórios do endereço do cliente ausentes para emissão de NF-e: %s',
+                        $label
+                    )
+                );
             }
         }
 
@@ -727,22 +978,38 @@ class Woocommerce {
      * Render order meta box.
      *
      * @since 1.0.0
+     * @version 1.0.1
      * @param \WP_Post $post | Post object.
      * @return void
      */
     public function render_order_meta_box( $post ) {
         $order = wc_get_order( $post->ID );
         $invoice_id = $order->get_meta('_bling_invoice_id');
+        $invoice_number = $order->get_meta('_bling_invoice_number');
+        $invoice_series = $order->get_meta('_bling_invoice_series');
         
         echo '<div class="bling-order-info">';
             if ( $invoice_id ) {
-                echo '<p><strong>' . __('Nota Fiscal:', 'joinotify-bling-erp') . '</strong></p>';
-                echo '<p>' . __('ID:', 'joinotify-bling-erp') . ' ' . esc_html( $invoice_id ) . '</p>';
+                echo '<p><strong>' . __('Nota Fiscal Bling:', 'joinotify-bling-erp') . '</strong></p>';
                 
-                // Try to get invoice details from meta first
-                $invoice_number = $order->get_meta('_bling_invoice_number');
+                // Show full invoice number (series + number) if available
                 if ( $invoice_number ) {
-                    echo '<p>' . __('Número:', 'joinotify-bling-erp') . ' ' . esc_html( $invoice_number ) . '</p>';
+                    $full_invoice_number = $invoice_number;
+
+                    if ( $invoice_series ) {
+                        $full_invoice_number = $invoice_series . '/' . $invoice_number;
+                    }
+
+                    echo '<p>' . __('Número:', 'joinotify-bling-erp') . ' <strong>' . esc_html( $full_invoice_number ) . '</strong></p>';
+                }
+                
+                echo '<p>' . __('ID Bling:', 'joinotify-bling-erp') . ' ' . esc_html( $invoice_id ) . '</p>';
+                
+                // Get creation date if available
+                $invoice_created = $order->get_meta('_bling_invoice_created');
+                
+                if ( $invoice_created ) {
+                    echo '<p>' . __('Criada em:', 'joinotify-bling-erp') . ' ' . esc_html( date_i18n( get_option('date_format') . ' ' . get_option('time_format'), strtotime($invoice_created) ) ) . '</p>';
                 }
                 
                 // Get DANFE link from order meta (stored from webhook)
@@ -755,14 +1022,126 @@ class Woocommerce {
                 
                 // Display DANFE link button if available
                 if ( ! empty( $danfe_link ) ) {
-                    echo '<p><a href="' . esc_url( $danfe_link ) . '" target="_blank" class="button button-small button-primary">';
-                        echo __('Consultar nota fiscal', 'joinotify-bling-erp');
+                    echo '<p><a href="' . esc_url( $danfe_link ) . '" target="_blank" class="button button-small button-primary" style="margin-right: 5px;">';
+                        echo '<span class="dashicons dashicons-external" style="vertical-align: middle; margin-top: -2px;"></span> ' . __('Consultar DANFE', 'joinotify-bling-erp');
                     echo '</a></p>';
                 }
+                
+                // Add button to check invoice status
+                echo '<p><a href="#" class="button button-small check-bling-status" data-order-id="' . esc_attr( $order->get_id() ) . '" style="margin-right: 5px;">';
+                    echo '<span class="dashicons dashicons-update" style="vertical-align: middle; margin-top: -2px;"></span> ' . __('Atualizar Status', 'joinotify-bling-erp');
+                echo '</a></p>';
+                
             } else {
                 echo '<p>' . __('Nenhuma nota fiscal criada no Bling para este pedido.', 'joinotify-bling-erp') . '</p>';
+                
+                // Show button to create invoice manually
+                if ( current_user_can('manage_woocommerce') ) {
+                    $create_url = wp_nonce_url(
+                        add_query_arg( array(
+                            'action' => 'bling_create_invoice',
+                            'order_id' => $order->get_id(),
+                        ), admin_url('admin-ajax.php') ),
+                        'bling_create_invoice_' . $order->get_id()
+                    );
+                    
+                    echo '<p><a href="' . esc_url( $create_url ) . '" class="button button-small button-primary create-bling-invoice" data-order-id="' . esc_attr( $order->get_id() ) . '">';
+                        echo '<span class="dashicons dashicons-media-document" style="vertical-align: middle; margin-top: -2px;"></span> ' . __('Criar Nota Fiscal', 'joinotify-bling-erp');
+                    echo '</a></p>';
+                }
             }
         echo '</div>';
+        
+        // Add some JavaScript for AJAX actions
+        $this->add_meta_box_scripts();
+    }
+
+
+    /**
+     * Add JavaScript for meta box actions
+     *
+     * @since 1.0.1
+     * @return void
+     */
+    private function add_meta_box_scripts() {
+        static $added = false;
+        
+        if ( $added ) {
+            return;
+        }
+        
+        $added = true;
+        
+        ?>
+        <script type="text/javascript">
+        jQuery(document).ready( function($) {
+            // Handle create invoice button click
+            $(document).on('click', '.create-bling-invoice', function(e) {
+                e.preventDefault();
+                
+                var $button = $(this);
+                var orderId = $button.data('order-id');
+                
+                $button.prop('disabled', true).text('Criando...');
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'bling_create_invoice_ajax',
+                        order_id: orderId,
+                        nonce: '<?php echo wp_create_nonce('bling_create_invoice'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('Nota fiscal criada com sucesso! ID: ' + response.data.invoice_id);
+                            location.reload();
+                        } else {
+                            alert('Erro: ' + response.data);
+                            $button.prop('disabled', false).text('Criar Nota Fiscal');
+                        }
+                    },
+                    error: function() {
+                        alert('Erro ao processar a requisição.');
+                        $button.prop('disabled', false).text('Criar Nota Fiscal');
+                    }
+                });
+            });
+            
+            // Handle check status button click
+            $(document).on('click', '.check-bling-status', function(e) {
+                e.preventDefault();
+                
+                var $button = $(this);
+                var orderId = $button.data('order-id');
+                
+                $button.prop('disabled', true).text('Verificando...');
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'bling_check_invoice_status_ajax',
+                        order_id: orderId,
+                        nonce: '<?php echo wp_create_nonce('bling_check_invoice_status'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('Status: ' + response.data.status);
+                        } else {
+                            alert('Erro: ' + response.data);
+                        }
+                        $button.prop('disabled', false).text('Atualizar Status');
+                    },
+                    error: function() {
+                        alert('Erro ao processar a requisição.');
+                        $button.prop('disabled', false).text('Atualizar Status');
+                    }
+                });
+            });
+        });
+        </script>
+        <?php
     }
 
 

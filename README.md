@@ -53,3 +53,11 @@ Este plugin integra o [Joinotify](https://meumouse.com/plugins/joinotify/) com o
 ## Suporte
 
 Este plugin foi desenvolvido pela equipe **MeuMouse.com**. Para dúvidas ou suporte, entre em contato através dos canais oficiais.
+
+## Escopos necessários:
+
+- Categoria de produtos (Gerenciar e Exclusão)
+- Clientes e Fornecedores (Gerenciar e Exclusão)
+- Integrações e Lojas virtuais
+- Notas fiscais (Exclusão, Lançar contas, Lançar estoque e Emissão de NF-e)
+- Produtos (Gerenciar, Exclusão, Salvar imagens e variações)

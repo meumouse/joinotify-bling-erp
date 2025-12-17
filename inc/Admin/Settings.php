@@ -51,6 +51,7 @@ class Settings {
      */
     public static function add_settings_tab($tabs) {
         $tabs['automation'] = __('Automação NFe', 'joinotify-bling-erp');
+        
         return $tabs;
     }
     

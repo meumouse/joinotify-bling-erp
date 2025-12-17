@@ -12,6 +12,7 @@ defined('ABSPATH') || exit;
  * AJAX handlers for Bling integration.
  *
  * @since 1.0.0
+ * @version 1.0.1
  * @package MeuMouse.com
  */
 class Ajax {
@@ -20,6 +21,7 @@ class Ajax {
      * Constructor
      *
      * @since 1.0.0
+     * @version 1.0.1
      * @return void
      */
     public function __construct() {
@@ -37,6 +39,9 @@ class Ajax {
         // Product handlers
         add_action( 'wp_ajax_bling_sync_single_product', array( __CLASS__, 'sync_single_product' ) );
         add_action( 'wp_ajax_bling_get_product_status', array( __CLASS__, 'get_product_status' ) );
+
+        add_action( 'wp_ajax_bling_create_invoice_ajax', array( $this, 'ajax_create_invoice' ) );
+        add_action( 'wp_ajax_bling_check_invoice_status_ajax', array( $this, 'ajax_check_invoice_status' ) );
     }
 
     
@@ -524,6 +529,80 @@ class Ajax {
                 __('Erro ao obter status do produto: %s', 'joinotify-bling-erp'),
                 $e->getMessage()
             ));
+        }
+    }
+
+
+    /**
+     * Handle AJAX request to create invoice
+     *
+     * @since 1.0.1
+     * @return void
+     */
+    public function ajax_create_invoice() {
+        check_ajax_referer('bling_create_invoice', 'nonce');
+        
+        if ( ! current_user_can('manage_woocommerce') ) {
+            wp_die('Unauthorized');
+        }
+        
+        $order_id = intval($_POST['order_id'] ?? 0);
+        $order = wc_get_order($order_id);
+        
+        if ( ! $order ) {
+            wp_send_json_error('Pedido não encontrado.');
+        }
+        
+        $result = $this->create_invoice_for_order($order);
+        
+        if ( is_wp_error($result) ) {
+            wp_send_json_error($result->get_error_message());
+        } else {
+            wp_send_json_success(array(
+                'invoice_id' => $result,
+                'message' => 'Nota fiscal criada com sucesso!'
+            ));
+        }
+    }
+
+    /**
+     * Handle AJAX request to check invoice status
+     *
+     * @since 1.0.1
+     * @return void
+     */
+    public function ajax_check_invoice_status() {
+        check_ajax_referer('bling_check_invoice_status', 'nonce');
+        
+        if ( ! current_user_can('manage_woocommerce') ) {
+            wp_die('Unauthorized');
+        }
+        
+        $order_id = intval($_POST['order_id'] ?? 0);
+        $order = wc_get_order($order_id);
+        
+        if ( ! $order ) {
+            wp_send_json_error('Pedido não encontrado.');
+        }
+        
+        $invoice_id = $order->get_meta('_bling_invoice_id');
+        
+        if ( ! $invoice_id ) {
+            wp_send_json_error('Nenhuma nota fiscal vinculada a este pedido.');
+        }
+        
+        $response = Client::get_invoice($invoice_id);
+        
+        if ( is_wp_error($response) ) {
+            wp_send_json_error('Erro ao verificar status: ' . $response->get_error_message());
+        }
+        
+        if ( isset($response['data']['data'][0]) ) {
+            $invoice_data = $response['data']['data'][0];
+            $status = $this->get_invoice_status_label($invoice_data['situacao'] ?? 0);
+            wp_send_json_success(array('status' => $status));
+        } else {
+            wp_send_json_error('Não foi possível obter o status da nota fiscal.');
         }
     }
 }

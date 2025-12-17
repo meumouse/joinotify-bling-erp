@@ -233,6 +233,18 @@ class Client {
 
 
     /**
+     * Get contact by ID from Bling.
+     *
+     * @since 1.0.1
+     * @param int $contact_id | Contact ID.
+     * @return array|WP_Error Contact data or error.
+     */
+    public static function get_contact( $contact_id ) {
+        return self::request('GET', '/contatos/' . $contact_id);
+    }
+
+
+    /**
      * Get contacts from Bling.
      *
      * @since 1.0.0
