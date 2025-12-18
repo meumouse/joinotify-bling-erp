@@ -22,7 +22,7 @@ class Plugin {
      * @since 1.0.0
      * @return string
      */
-    public const VERSION = '1.0.2';
+    public const VERSION = '1.0.3';
 
     /**
      * Plugin slug.
@@ -109,7 +109,7 @@ class Plugin {
             'JOINOTIFY_BLING_SLUG'       => self::SLUG,
             'JOINOTIFY_BLING_VERSION'    => self::VERSION,
             'JOINOTIFY_BLING_DEBUG_MODE' => defined('WP_DEBUG') && WP_DEBUG,
-            'JOINOTIFY_BLING_DEV_MODE'   => false,
+            'JOINOTIFY_BLING_DEV_MODE'   => true,
         );
 
         foreach ( $constants as $key => $value ) {
