@@ -33,6 +33,10 @@ class Hooks {
      * @return void
      */
     public function handle_invoice_authorized( $payload ) {
+        if ( defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE ) {
+            error_log('[JOINOTIFY - BLING ERP]: NFe autorizada (joinotify_bling_invoice_authorized): ' . print_r( $payload, true ) );
+        }
+
         $invoice_data = $payload['invoice_data'] ?? array();
         $invoice_id = $payload['invoice_id'] ?? 0;
         
