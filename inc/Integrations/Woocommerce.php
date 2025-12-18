@@ -1211,7 +1211,7 @@ class Woocommerce {
             
             // Add button to check NF status
             echo '<p><a href="#" class="button button-small check-bling-status" data-order-id="' . esc_attr( $order->get_id() ) . '" style="margin-right: 5px;">';
-            echo '<span class="dashicons dashicons-update" style="vertical-align: middle; margin-top: -2px;"></span> ' . __( 'Atualizar Status', 'joinotify-bling-erp' );
+            echo '<span class="dashicons dashicons-update" style="vertical-align: middle; margin-top: -2px;"></span> ' . __( 'Verificar status', 'joinotify-bling-erp' );
             echo '</a></p>';
             
         } else {
