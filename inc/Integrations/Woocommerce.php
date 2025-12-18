@@ -3,6 +3,7 @@
 namespace MeuMouse\Joinotify\Bling\Integrations;
 
 use MeuMouse\Joinotify\Bling\API\Client;
+
 use WC_Order;
 use WP_Error;
 use Automattic\WooCommerce\Internal\DataStores\Orders\CustomOrdersTableController;
@@ -13,7 +14,7 @@ use Automattic\WooCommerce\Internal\DataStores\Orders\CustomOrdersTableControlle
  * Handles integration between WooCommerce orders and Bling ERP system.
  *
  * @since 1.0.0
- * @version 1.0.2
+ * @version 1.0.3
  * @package MeuMouse\Joinotify\Bling\Integrations
  * @author MeuMouse.com
  */
@@ -42,6 +43,14 @@ class Woocommerce {
      * @var array
      */
     private static $invoice_status_cache = array();
+
+    /**
+     * Set development mode
+     * 
+     * @since 1.0.3
+     * @return bool
+     */
+    private static $dev_mode = false;
     
     /**
      * Constructor
@@ -53,6 +62,8 @@ class Woocommerce {
         if ( ! class_exists( 'WooCommerce' ) ) {
             return;
         }
+
+        self::$dev_mode = defined('JOINOTIFY_BLING_DEV_MODE') && JOINOTIFY_BLING_DEV_MODE;
         
         // Load configuration
         $this->load_config();
@@ -185,7 +196,7 @@ class Woocommerce {
         try {
             $order_id = $order->get_id();
             
-            if ( defined( 'JOINOTIFY_BLING_DEV_MODE' ) && JOINOTIFY_BLING_DEV_MODE ) {
+            if ( self::$dev_mode ) {
                 error_log( '[JOINOTIFY - BLING ERP]: Iniciando criação de NF para pedido #' . $order_id );
             }
 
@@ -224,7 +235,7 @@ class Woocommerce {
                     $validation = $this->validate_contact_data_for_invoice( $contact_data );
                     
                     if ( is_wp_error( $validation ) ) {
-                        if ( defined( 'JOINOTIFY_BLING_DEV_MODE' ) && JOINOTIFY_BLING_DEV_MODE ) {
+                        if ( self::$dev_mode ) {
                             error_log( '[JOINOTIFY - BLING ERP]: Dados do contato incompletos: ' . $validation->get_error_message() );
                         }
             
@@ -253,7 +264,7 @@ class Woocommerce {
                         }
                     }
                 } else {
-                    if ( defined( 'JOINOTIFY_BLING_DEV_MODE' ) && JOINOTIFY_BLING_DEV_MODE ) {
+                    if ( self::$dev_mode ) {
                         error_log( '[JOINOTIFY - BLING ERP]: Não foi possível buscar dados do contato ID: ' . $customer_id );
                     }
 
@@ -278,7 +289,7 @@ class Woocommerce {
             // Create invoice in Bling
             $response = Client::create_invoice( $invoice_data );
 
-            if ( defined( 'JOINOTIFY_BLING_DEV_MODE' ) && JOINOTIFY_BLING_DEV_MODE ) {
+            if ( self::$dev_mode ) {
                 error_log( '[JOINOTIFY - BLING ERP]: Criando NF para pedido #' . $order_id );
             }
             
@@ -337,7 +348,7 @@ class Woocommerce {
                     'Erro ao enviar NF para SEFAZ: ' . $send->get_error_message()
                 );
             } else {
-                if ( defined( 'JOINOTIFY_BLING_DEV_MODE' ) && JOINOTIFY_BLING_DEV_MODE ) {
+                if ( self::$dev_mode ) {
                     error_log(
                         '[JOINOTIFY - BLING ERP]: NF ' . $invoice_id . ' enviada para SEFAZ com sucesso.'
                     );
@@ -386,7 +397,7 @@ class Woocommerce {
         
         // Skip if no CPF/CNPJ
         if ( empty( $customer_data['numeroDocumento'] ) ) {
-            if ( defined( 'JOINOTIFY_BLING_DEV_MODE' ) && JOINOTIFY_BLING_DEV_MODE ) {
+            if ( self::$dev_mode ) {
                 error_log( '[JOINOTIFY - BLING ERP]: Cliente não possui CPF/CNPJ cadastrado.' );
             }
 
@@ -426,7 +437,7 @@ class Woocommerce {
         // Create new contact
         $response = Client::save_contact( $customer_data );
 
-        if ( defined( 'JOINOTIFY_BLING_DEV_MODE' ) && JOINOTIFY_BLING_DEV_MODE ) {
+        if ( self::$dev_mode ) {
             error_log( '[JOINOTIFY - BLING ERP]: Criando novo cliente no Bling.' );
         }
         
@@ -521,7 +532,7 @@ class Woocommerce {
     private function find_contact_by_document( $document ) {
         $clean_document = preg_replace( '/[^0-9]/', '', $document );
         
-        if ( defined( 'JOINOTIFY_BLING_DEV_MODE' ) && JOINOTIFY_BLING_DEV_MODE ) {
+        if ( self::$dev_mode ) {
             error_log( '[JOINOTIFY - BLING ERP]: Buscando contato por documento: ' . $clean_document );
         }
         
@@ -537,7 +548,7 @@ class Woocommerce {
         if ( isset( $response['data']['data'][0]['id'] ) ) {
             $contact_id = $response['data']['data'][0]['id'];
             
-            if ( defined( 'JOINOTIFY_BLING_DEV_MODE' ) && JOINOTIFY_BLING_DEV_MODE ) {
+            if ( self::$dev_mode ) {
                 error_log( '[JOINOTIFY - BLING ERP]: Contato encontrado. ID: ' . $contact_id );
             }
 
@@ -907,7 +918,7 @@ class Woocommerce {
      * @return true|WP_Error
      */
     private function validate_contact_data_for_invoice( $contact_data ) {
-        if ( defined( 'JOINOTIFY_BLING_DEV_MODE' ) && JOINOTIFY_BLING_DEV_MODE ) {
+        if ( self::$dev_mode ) {
             error_log( '[JOINOTIFY - BLING ERP]: Validando dados do contato para NF-e.' );
         }
 
@@ -1062,14 +1073,26 @@ class Woocommerce {
      * Get orders page ID
      * 
      * @since 1.0.0
+     * @version 1.0.3
      * @return string
      */
     public static function get_orders_page() {
-        // compatibility with HPOS
-        if ( class_exists('\Automattic\WooCommerce\Internal\DataStores\Orders\CustomOrdersTableController') && wc_get_container()->get( CustomOrdersTableController::class )->custom_orders_table_usage_is_enabled() ) {
-            return wc_get_page_screen_id('shop-order');
+        // HPOS active
+        if ( class_exists( '\Automattic\WooCommerce\Internal\DataStores\Orders\CustomOrdersTableController' ) ) {
+            $container = wc_get_container();
+
+            if ( $container && method_exists( $container, 'get' ) ) {
+                $controller = $container->get( CustomOrdersTableController::class );
+
+                if ( $controller && method_exists( $controller, 'custom_orders_table_usage_is_enabled' ) &&
+                    $controller->custom_orders_table_usage_is_enabled()
+                ) {
+                    return 'woocommerce_page_wc-orders';
+                }
+            }
         }
 
+        // classic mode
         return 'shop_order';
     }
     
@@ -1155,6 +1178,7 @@ class Woocommerce {
             
             // Get creation date if available
             $invoice_created = $order->get_meta( '_bling_invoice_created' );
+
             if ( $invoice_created ) {
                 echo '<p>' . __( 'Criada em:', 'joinotify-bling-erp' ) . ' ' . esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $invoice_created ) ) ) . '</p>';
             }
@@ -1162,6 +1186,7 @@ class Woocommerce {
             // If we don't have DANFE link stored, try to get from API
             if ( empty( $danfe_link ) ) {
                 $danfe_link = $this->get_danfe_link_from_api( $invoice_id );
+
                 if ( ! empty( $danfe_link ) ) {
                     $order->update_meta_data( '_bling_danfe_link', $danfe_link );
                     $order->save();
@@ -1233,13 +1258,7 @@ class Woocommerce {
                 return $invoice_data['linkDanfe'];
             }
             
-            // Alternative: construct link from chaveAcesso if available
-            if ( isset( $invoice_data['chaveAcesso'] ) && ! empty( $invoice_data['chaveAcesso'] ) ) {
-                return 'https://www.bling.com.br/doc.view.php?chaveAcesso=' . $invoice_data['chaveAcesso'];
-            }
-            
             return '';
-            
         } catch ( \Exception $e ) {
             error_log( 'Erro ao buscar link DANFE: ' . $e->getMessage() );
             return '';
@@ -1341,7 +1360,7 @@ class Woocommerce {
 
         $order->save();
 
-        if ( defined( 'JOINOTIFY_BLING_DEV_MODE' ) && JOINOTIFY_BLING_DEV_MODE ) {
+        if ( self::$dev_mode ) {
             error_log(
                 '[JOINOTIFY - BLING ERP]: Detalhes da NF atualizados (DANFE / chave / status) para pedido #' . $order->get_id()
             );

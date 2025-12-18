@@ -13,7 +13,7 @@ defined( 'ABSPATH' ) || exit;
  * Handles automation settings for Bling NFe integration.
  *
  * @since 1.0.0
- * @version 1.0.2
+ * @version 1.0.3
  * @package MeuMouse\Joinotify\Bling\Admin
  * @author MeuMouse.com
  */
