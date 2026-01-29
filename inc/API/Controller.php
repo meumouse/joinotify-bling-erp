@@ -3,7 +3,7 @@
 namespace MeuMouse\Joinotify\Bling\API;
 
 use MeuMouse\Joinotify\Core\Workflow_Processor;
-
+use Automattic\WooCommerce\Utilities\OrderUtil;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_Error;
@@ -15,6 +15,7 @@ defined( 'ABSPATH' ) || exit;
  * Handles the OAuth and Webhook REST API endpoints for Bling integration.
  *
  * @since 1.0.0
+ * @version 1.0.4
  * @package MeuMouse\Joinotify\Bling\API
  * @author MeuMouse.com
  */
@@ -169,9 +170,47 @@ class Controller {
                 $invoice_id
             ) );
             
-            // Still process the webhook for potential workflows
-            $order_id = 0;
+            return new WP_REST_Response(
+                array(
+                    'success'  => false,
+                    'message'  => 'Webhook ignored - no linked order found',
+                    'order_id' => 0,
+                ),
+                200
+            );
         }
+
+        $order = wc_get_order( $order_id );
+
+        if ( ! $order ) {
+            return new WP_REST_Response(
+                array(
+                    'success'  => false,
+                    'message'  => 'Webhook ignored - order not accessible',
+                    'order_id' => 0,
+                ),
+                200
+            );
+        }
+
+        $dedup_key = self::get_webhook_dedup_key( $event_id, $event, $invoice_id, $situacao );
+        $processed_events = $order->get_meta( '_bling_webhook_processed_events' );
+        $processed_events = is_array( $processed_events ) ? $processed_events : array();
+
+        if ( isset( $processed_events[ $dedup_key ] ) ) {
+            return new WP_REST_Response(
+                array(
+                    'success'  => true,
+                    'message'  => 'Webhook ignored - duplicate event',
+                    'order_id' => $order_id,
+                ),
+                200
+            );
+        }
+
+        $processed_events[ $dedup_key ] = current_time( 'mysql' );
+        $order->update_meta_data( '_bling_webhook_processed_events', $processed_events );
+        $order->save();
         
         // Determine which trigger hook to fire based on event and status
         $trigger_hook = '';
@@ -252,9 +291,7 @@ class Controller {
         }
         
         // Update order meta with new invoice status if we found an order
-        if ( $order_id ) {
-            self::update_order_invoice_status( $order_id, $invoice_id, $situacao, $invoice_number, $webhook_data );
-        }
+        self::update_order_invoice_status( $order_id, $invoice_id, $situacao, $invoice_number, $webhook_data );
         
         // Retrieve full invoice data from Bling API if possible (for placeholders)
         $invoice_data = self::get_invoice_details( $invoice_id );
@@ -396,8 +433,7 @@ class Controller {
         }
         
         // Also check for HPOS compatibility
-        if ( class_exists( '\Automattic\WooCommerce\Utilities\OrderUtil' ) && 
-             \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled() ) {
+        if ( class_exists( OrderUtil::class ) && OrderUtil::custom_orders_table_usage_is_enabled() ) {
             
             $order_ids = $wpdb->get_col( $wpdb->prepare(
                 "SELECT order_id 
@@ -415,6 +451,31 @@ class Controller {
         
         return 0;
     }
+
+    
+    /**
+     * Build a deduplication key for webhook processing.
+     *
+     * @since 1.0.4
+     * @param string $event_id Event ID from webhook.
+     * @param string $event Event type.
+     * @param int    $invoice_id Bling invoice ID.
+     * @param int    $situacao Invoice status code.
+     * @return string Deduplication key.
+     */
+    private static function get_webhook_dedup_key( $event_id, $event, $invoice_id, $situacao ) {
+        if ( ! empty( $event_id ) ) {
+            return 'event:' . sanitize_text_field( $event_id );
+        }
+
+        return sprintf(
+            'event:%s|invoice:%d|status:%d',
+            sanitize_text_field( $event ),
+            intval( $invoice_id ),
+            intval( $situacao )
+        );
+    }
+
     
     /**
      * Update order meta with invoice status from webhook

@@ -30,10 +30,8 @@ if ( file_exists( $autoload ) ) {
     require_once $autoload;
 }
 
-if ( ! class_exists( Plugin::class ) ) {
-    return;
-}
+add_action( 'init', function() {
+    $plugin_version = '1.0.4';
 
-$plugin_version = '1.0.4';
-
-Plugin::get_instance()->init( $plugin_version );
+    Plugin::get_instance()->init( $plugin_version );
+});

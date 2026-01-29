@@ -44,6 +44,29 @@ class Plugin {
      */
     private static $instance = null;
 
+    /**
+     * Cache for instantiated classes to prevent duplicate instantiation.
+     * 
+     * @since 1.0.4
+     * @var array
+     */
+    private $instantiated_classes = array();
+
+    /**
+     * Deferred classes: hook => class list.
+     *
+     * @since 1.0.4
+     * @var array
+     */
+    private $deferred_classes = array(
+        'woocommerce_loaded' => array(
+            'MeuMouse\\Joinotify\\Bling\\Integrations\\Woocommerce',
+        ),
+        'joinotify_init' => array(
+            'MeuMouse\\Joinotify\\Bling\\Integrations\\Joinotify',
+        ),
+    );
+
 
     /**
      * Get plugin instance
@@ -65,6 +88,7 @@ class Plugin {
      * Initialize the plugin.
      *
      * @since 1.0.0
+     * @version 1.0.4
      * @param string $plugin_version | Plugin version
      * @return void
      */
@@ -82,11 +106,8 @@ class Plugin {
         // set compatibility with WooCommerce HPOS (High-Performance Order Storage)
         add_action( 'before_woocommerce_init', array( $this, 'setup_hpos_compatibility' ) );
 
-        // check if WooCommerce is active
-        add_action( 'woocommerce_loaded', array( $this, 'check_dependencies' ) );
-
-        // instance classes after Joinotify is loaded
-        add_action( 'joinotify_init', array( $this, 'instance_classes' ) );
+        // instance classes
+        $this->instance_classes();
 
         // hook after plugin init
         do_action('Joinotify_Bling/After_Init');
@@ -123,28 +144,6 @@ class Plugin {
             if ( ! defined( $key ) ) {
                 define( $key, $value );
             }
-        }
-    }
-
-
-    /**
-     * Check plugin dependencies
-     * 
-     * @since 1.0.0
-     * @version 1.0.4
-     * @return void
-     */
-    public function check_dependencies() {
-        // WooCommerce dependency
-        if ( ! class_exists('WooCommerce') ) {
-            add_action( 'admin_notices', array( $this, 'woocommerce_missing_notice' ) );
-            return;
-        }
-
-        // Joinotify dependency
-        if ( ! class_exists('MeuMouse\Joinotify\Core\Init') ) {
-            add_action( 'admin_notices', array( $this, 'joinotify_missing_notice' ) );
-            return;
         }
     }
 
@@ -210,11 +209,15 @@ class Plugin {
      * Instance classes after load Composer
      * 
      * @since 1.0.0
+     * @version 1.0.4
      * @return void
      */
     public function instance_classes() {
-        // Check dependencies
-        if ( ! class_exists('WooCommerce') || ! class_exists('MeuMouse\Joinotify\Integrations\Integrations_Base') ) {
+        $this->register_deferred_classes();
+
+        // Joinotify dependency
+        if ( ! class_exists('MeuMouse\Joinotify\Core\Init') ) {
+            add_action( 'admin_notices', array( $this, 'joinotify_missing_notice' ) );
             return;
         }
 
@@ -232,7 +235,7 @@ class Plugin {
             $classmap = array();
         }
 
-        // Filter and instance classes
+        // Filter and instance classes (excluding deferred ones)
         $this->instance_filtered_classes( $classmap );
     }
 
@@ -241,6 +244,7 @@ class Plugin {
      * Filter and instance classes
      * 
      * @since 1.0.0
+     * @version 1.0.4
      * @param array $classmap
      * @return void
      */
@@ -263,6 +267,13 @@ class Plugin {
             
             // Skip traits
             if ( strpos( $class, 'Trait' ) !== false ) {
+                return false;
+            }
+
+            $deferred = $this->get_deferred_class_list();
+
+            // Skip deferred classes (they will be instantiated on their hook)
+            if ( in_array( $class, $deferred, true ) ) {
                 return false;
             }
             
@@ -290,36 +301,140 @@ class Plugin {
      * Safely instance a class
      * 
      * @since 1.0.0
-     * @param string $class
+     * @version 1.0.4
+     * @param string $class | Class name
      * @return void
      */
     private function safe_instance_class( $class ) {
+        if ( ! is_string( $class ) || empty( trim( $class ) ) ) {
+            return null;
+        }
+
+        if ( isset( $this->instantiated_classes[ $class ] ) ) {
+            return $this->instantiated_classes[ $class ];
+        }
+
+        if ( ! class_exists( $class ) ) {
+            return null;
+        }
+
         try {
             $reflection = new ReflectionClass( $class );
-            
+
             if ( ! $reflection->isInstantiable() ) {
-                return;
+                return null;
             }
 
             $constructor = $reflection->getConstructor();
-            
+
             // Only instance classes without required constructor parameters
             if ( $constructor && $constructor->getNumberOfRequiredParameters() > 0 ) {
-                return;
+                return null;
             }
 
-            $instance = new $class();
-            
+            $instance = $reflection->newInstance();
+
+            $this->instantiated_classes[ $class ] = $instance;
+
             // Call init method if exists
             if ( method_exists( $instance, 'init' ) ) {
-                $instance->init();
+                $init_method = $reflection->getMethod( 'init' );
+
+                if ( $init_method->isPublic() && ! $init_method->isStatic() ) {
+                    $instance->init();
+                }
             }
-            
+
+            return $instance;
+
         } catch ( Exception $e ) {
             if ( defined('JOINOTIFY_BLING_DEBUG_MODE') && JOINOTIFY_BLING_DEBUG_MODE ) {
                 error_log( 'Joinotify Bling: Error instancing class ' . $class . ' - ' . $e->getMessage() );
             }
+
+            return null;
         }
+    }
+
+
+    /**
+     * Register deferred class instantiation by hook.
+     *
+     * @since 1.0.4
+     * @return void
+     */
+    private function register_deferred_classes() {
+        /**
+         * Allow third-parties to add deferred classes.
+         *
+         * Format:
+         * array(
+         *   'hook/name' => array( 'Full\\ClassName', ... ),
+         * )
+         *
+         * @since 1.0.4
+         */
+        $map = apply_filters( 'Joinotify_Bling/Init/Deferred_Classes', $this->deferred_classes );
+
+        if ( ! is_array( $map ) || empty( $map ) ) {
+            return;
+        }
+
+        foreach ( $map as $hook => $classes ) {
+            if ( ! is_string( $hook ) || empty( trim( $hook ) ) ) {
+                continue;
+            }
+
+            if ( ! is_array( $classes ) || empty( $classes ) ) {
+                continue;
+            }
+
+            $callback = function() use ( $classes ) {
+                foreach ( $classes as $class ) {
+                    $this->safe_instance_class( $class );
+                }
+            };
+
+            // If the hook already fired, instantiate immediately.
+            if ( did_action( $hook ) ) {
+                $callback();
+
+                continue;
+            }
+
+            add_action( $hook, $callback, 10, 0 );
+        }
+    }
+
+
+    /**
+     * Get a flat list of deferred classes.
+     *
+     * @since 1.0.4
+     * @return array
+     */
+    private function get_deferred_class_list() {
+        $map = apply_filters( 'Joinotify_Bling/Init/Deferred_Classes', $this->deferred_classes );
+
+        if ( ! is_array( $map ) || empty( $map ) ) {
+            return array();
+        }
+
+        $all = array();
+
+        foreach ( $map as $classes ) {
+            if ( ! is_array( $classes ) ) {
+                continue;
+            }
+
+            foreach ( $classes as $class ) {
+                if ( is_string( $class ) && ! empty( trim( $class ) ) ) {
+                    $all[] = $class;
+                }
+            }
+        }
+
+        return array_values( array_unique( $all ) );
     }
 
 
