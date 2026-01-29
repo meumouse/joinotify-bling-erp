@@ -3,6 +3,8 @@
 namespace MeuMouse\Joinotify\Bling\Core;
 
 use Automattic\WooCommerce\Utilities\FeaturesUtil;
+use Exception;
+use ReflectionClass;
 
 // Exit if accessed directly.
 defined('ABSPATH') || exit;
@@ -11,6 +13,7 @@ defined('ABSPATH') || exit;
  * Plugin class to initialize integration components.
  *
  * @since 1.0.0
+ * @version 1.0.4
  * @package MeuMouse\Joinotify\Bling\Core
  * @author MeuMouse.com
  */
@@ -22,7 +25,7 @@ class Plugin {
      * @since 1.0.0
      * @return string
      */
-    public const VERSION = '1.0.3';
+    private $plugin_version;
 
     /**
      * Plugin slug.
@@ -62,9 +65,12 @@ class Plugin {
      * Initialize the plugin.
      *
      * @since 1.0.0
+     * @param string $plugin_version | Plugin version
      * @return void
      */
-    public function init() {
+    public function init( $plugin_version ) {
+        $this->plugin_version = $plugin_version;
+
         // hook before plugin init
         do_action('Joinotify_Bling/Before_Init');
 
@@ -91,6 +97,7 @@ class Plugin {
      * Define plugin constants used across modules.
      *
      * @since 1.0.0
+     * @version 1.0.4
      * @return void
      */
     private function define_constants() {
@@ -107,9 +114,9 @@ class Plugin {
             'JOINOTIFY_BLING_ASSETS'     => $base_url . 'assets/',
             'JOINOTIFY_BLING_ABSPATH'    => dirname( $base_file ) . '/',
             'JOINOTIFY_BLING_SLUG'       => self::SLUG,
-            'JOINOTIFY_BLING_VERSION'    => self::VERSION,
+            'JOINOTIFY_BLING_VERSION'    => $this->plugin_version,
             'JOINOTIFY_BLING_DEBUG_MODE' => defined('WP_DEBUG') && WP_DEBUG,
-            'JOINOTIFY_BLING_DEV_MODE'   => false,
+            'JOINOTIFY_BLING_DEV_MODE'   => true,
         );
 
         foreach ( $constants as $key => $value ) {
@@ -124,6 +131,7 @@ class Plugin {
      * Check plugin dependencies
      * 
      * @since 1.0.0
+     * @version 1.0.4
      * @return void
      */
     public function check_dependencies() {
@@ -134,7 +142,7 @@ class Plugin {
         }
 
         // Joinotify dependency
-        if ( ! class_exists('MeuMouse\Joinotify\Joinotify') ) {
+        if ( ! class_exists('MeuMouse\Joinotify\Core\Init') ) {
             add_action( 'admin_notices', array( $this, 'joinotify_missing_notice' ) );
             return;
         }
@@ -287,7 +295,7 @@ class Plugin {
      */
     private function safe_instance_class( $class ) {
         try {
-            $reflection = new \ReflectionClass( $class );
+            $reflection = new ReflectionClass( $class );
             
             if ( ! $reflection->isInstantiable() ) {
                 return;
@@ -307,7 +315,7 @@ class Plugin {
                 $instance->init();
             }
             
-        } catch ( \Exception $e ) {
+        } catch ( Exception $e ) {
             if ( defined('JOINOTIFY_BLING_DEBUG_MODE') && JOINOTIFY_BLING_DEBUG_MODE ) {
                 error_log( 'Joinotify Bling: Error instancing class ' . $class . ' - ' . $e->getMessage() );
             }
